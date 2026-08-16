@@ -486,6 +486,20 @@
       rss: { label: 'Web', icon: '🌐' },
     };
 
+    function stripMarkdownNoise(text) {
+      if (!text) return '';
+      return text
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/^#{1,6}\s*/gm, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1')
+        .replace(/`([^`]*)`/g, '$1')
+        .replace(/\n{2,}/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+
     function resolveSource(item) {
       const feed = cachedFeeds.find(f => f.id === item.feed_id);
       const platform = PLATFORM_META[feed && feed.feed_type] || PLATFORM_META.rss;
@@ -532,17 +546,17 @@
               </a>
 
               <div class="px-4 space-y-2">
-                <div class="flex items-center justify-between text-lg gap-2">
-                  <div class="flex items-center gap-1.5 min-w-0">
+                <div class="flex items-center justify-between text-lg gap-2 flex-wrap">
+                  <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-base font-semibold">
                       ${source.platform.icon} ${source.platform.label}
                     </span>
-                    <span class="font-bold text-slate-800 text-lg truncate">${source.displayName}</span>
+                    <span class="font-bold text-slate-800 text-lg break-words">${source.displayName}</span>
                   </div>
-                  <div>${matchBadge}</div>
+                  <div class="shrink-0">${matchBadge}</div>
                 </div>
 
-                <h2 class="text-xl font-bold text-slate-900 leading-snug">
+                <h2 class="text-2xl font-bold text-slate-900 leading-snug">
                   <a href="${item.url}" target="_blank" class="hover:text-blue-600 transition">
                     ${item.title}
                   </a>
@@ -550,7 +564,7 @@
 
                 ${item.curator_note ? `
                   <p class="text-lg text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    💡 <strong>Por qué verlo:</strong> ${item.curator_note}
+                    💡 <strong>Por qué verlo:</strong> ${stripMarkdownNoise(item.curator_note)}
                   </p>
                 ` : ''}
 
@@ -565,10 +579,10 @@
                   </div>
 
                   <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-slate-200 space-y-2 text-slate-700 leading-relaxed">
-                    <p class="whitespace-pre-line text-lg">${item.summary_tldr || 'Resumen disponible.'}</p>
+                    <p class="whitespace-pre-line text-lg">${stripMarkdownNoise(item.summary_tldr) || 'Resumen disponible.'}</p>
                     ${takeaways.length > 0 ? `
                       <ul class="space-y-1 text-lg text-slate-700 list-disc list-inside pt-1">
-                        ${takeaways.map(t => `<li>${t}</li>`).join('')}
+                        ${takeaways.map(t => `<li>${stripMarkdownNoise(t)}</li>`).join('')}
                       </ul>
                     ` : ''}
                   </div>
@@ -602,30 +616,30 @@
         } else {
           return `
             <article class="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-4 sm:p-5 transition shadow-sm hover:shadow-md space-y-3">
-              <div class="flex items-center justify-between text-lg gap-2">
-                <div class="flex items-center gap-1.5 min-w-0">
+              <div class="flex items-center justify-between text-lg gap-2 flex-wrap">
+                <div class="flex items-center gap-1.5 flex-wrap">
                   <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-base font-semibold">
                     ${source.platform.icon} ${source.platform.label}
                   </span>
-                  <span class="font-bold text-slate-800 text-lg truncate">${source.displayName}</span>
+                  <span class="font-bold text-slate-800 text-lg break-words">${source.displayName}</span>
                 </div>
-                <div>${matchBadge}</div>
+                <div class="shrink-0">${matchBadge}</div>
               </div>
 
               <div>
-                <h2 class="text-xl sm:text-2xl font-bold text-slate-900 font-serif leading-snug">
+                <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 font-serif leading-snug">
                   <a href="${item.url}" target="_blank" class="hover:text-blue-600 transition">
                     ${item.title}
                   </a>
                 </h2>
                 <p class="text-lg text-slate-600 font-sans mt-1.5 line-clamp-2 leading-relaxed">
-                  ${item.summary_tldr || item.raw_content || ''}
+                  ${stripMarkdownNoise(item.summary_tldr || item.raw_content)}
                 </p>
               </div>
 
               ${item.curator_note ? `
                 <p class="text-lg text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                  💡 <strong>Por qué leerlo:</strong> ${item.curator_note}
+                  💡 <strong>Por qué leerlo:</strong> ${stripMarkdownNoise(item.curator_note)}
                 </p>
               ` : ''}
 
@@ -642,7 +656,7 @@
                 <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-slate-200 space-y-2 text-slate-700">
                   ${takeaways.length > 0 ? `
                     <ul class="space-y-1 text-lg text-slate-700 list-disc list-inside">
-                      ${takeaways.map(t => `<li>${t}</li>`).join('')}
+                      ${takeaways.map(t => `<li>${stripMarkdownNoise(t)}</li>`).join('')}
                     </ul>
                   ` : ''}
                 </div>
