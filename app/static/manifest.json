@@ -1,0 +1,16 @@
+{
+  "name": "FocusFeed - Anti-Algoritmo",
+  "short_name": "FocusFeed",
+  "description": "Feed curado por IA libre de algoritmos de recomendación",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3669/3669986.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
