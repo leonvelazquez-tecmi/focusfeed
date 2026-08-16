@@ -6,7 +6,6 @@ from datetime import datetime
 from app.db import get_db_connection
 from app.extractors import clean_html_article, fetch_youtube_transcript_or_fallback
 
-# Namespaces commonly found in YouTube and RSS feeds
 NAMESPACES = {
     'atom': 'http://www.w3.org/2005/Atom',
     'yt': 'http://www.youtube.com/xml/schemas/2015',
@@ -15,22 +14,59 @@ NAMESPACES = {
     'dc': 'http://purl.org/dc/elements/1.1/'
 }
 
+def resolve_feed_url(raw_url: str) -> tuple[str, str, str]:
+    """
+    Takes any user URL (YouTube @handle, channel URL, Substack, blog)
+    and resolves it to a valid RSS feed URL, feed type, and suggested title.
+    """
+    raw_url = raw_url.strip()
+    feed_type = "rss"
+    suggested_title = ""
+
+    # YouTube URL
+    if "youtube.com" in raw_url or "youtu.be" in raw_url:
+        feed_type = "youtube"
+        if "feeds/videos.xml" in raw_url:
+            return raw_url, feed_type, suggested_title
+            
+        if "channel/" in raw_url:
+            ch_id = raw_url.split("channel/")[1].split("/")[0].split("?")[0]
+            return f"https://www.youtube.com/feeds/videos.xml?channel_id={ch_id}", feed_type, suggested_title
+            
+        # Try fetching channel page to extract channelId
+        try:
+            req = urllib.request.Request(raw_url, headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'})
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                html = resp.read().decode('utf-8', errors='ignore')
+                # Check for channel_id in RSS link tag
+                rss_match = re.search(r'href="(https://www\.youtube\.com/feeds/videos\.xml\?channel_id=[a-zA-Z0-9_-]+)"', html)
+                if rss_match:
+                    return rss_match.group(1), feed_type, suggested_title
+                    
+                # Check for "channelId":"UC..."
+                cid_match = re.search(r'"channelId":"([a-zA-Z0-9_-]+)"', html)
+                if cid_match:
+                    return f"https://www.youtube.com/feeds/videos.xml?channel_id={cid_match.group(1)}", feed_type, suggested_title
+        except Exception:
+            pass
+
+    # Substack URL
+    if "substack.com" in raw_url:
+        feed_type = "substack"
+        if not raw_url.endswith("/feed"):
+            clean_url = raw_url.rstrip("/")
+            return f"{clean_url}/feed", feed_type, suggested_title
+
+    # Default RSS URL
+    return raw_url, feed_type, suggested_title
+
 def parse_youtube_feed_xml(xml_text: str, feed_id: int):
-    """
-    Parses a YouTube Atom feed XML and returns structured items.
-    """
     root = ET.fromstring(xml_text)
     items = []
-    
-    # Check if Atom root
-    entries = root.findall('atom:entry', NAMESPACES) or root.findall('{http://www.w3.org/2005/Atom}entry')
-    if not entries:
-        # Try finding entries without namespace prefix if any
-        entries = root.findall('.//entry')
+    entries = root.findall('atom:entry', NAMESPACES) or root.findall('{http://www.w3.org/2005/Atom}entry') or root.findall('.//entry')
 
     for entry in entries:
         try:
-            # Video ID
             yt_video_id_el = entry.find('yt:videoId', NAMESPACES)
             if yt_video_id_el is not None and yt_video_id_el.text:
                 video_id = yt_video_id_el.text.strip()
@@ -41,23 +77,18 @@ def parse_youtube_feed_xml(xml_text: str, feed_id: int):
                 else:
                     continue
 
-            # Title
             title_el = entry.find('atom:title', NAMESPACES) or entry.find('title')
             title = title_el.text.strip() if (title_el is not None and title_el.text) else "Sin título"
 
-            # URL
             link_el = entry.find('atom:link[@rel="alternate"]', NAMESPACES) or entry.find('link')
             url = link_el.get('href') if link_el is not None else f"https://www.youtube.com/watch?v={video_id}"
 
-            # Author / Channel
             author_el = entry.find('.//atom:author/atom:name', NAMESPACES) or entry.find('.//author/name')
-            author = author_el.text.strip() if (author_el is not None and author_el.text) else "YouTube Channel"
+            author = author_el.text.strip() if (author_el is not None and author_el.text) else "Canal de YouTube"
 
-            # Published
             pub_el = entry.find('atom:published', NAMESPACES) or entry.find('published')
             published_at = pub_el.text.strip() if (pub_el is not None and pub_el.text) else datetime.utcnow().isoformat()
 
-            # Media group (description, thumbnail)
             desc = ""
             thumb_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
             
@@ -81,23 +112,18 @@ def parse_youtube_feed_xml(xml_text: str, feed_id: int):
                 "video_id": video_id,
                 "thumbnail_url": thumb_url,
                 "raw_content": desc,
-                "transcript": desc # Initial fallback until enriched
+                "transcript": desc
             })
-        except Exception as e:
+        except Exception:
             continue
             
     return items
 
 def parse_rss_feed_xml(xml_text: str, feed_id: int):
-    """
-    Parses a standard RSS 2.0 or Atom feed (Blogs, Substack, Podcasts).
-    """
     root = ET.fromstring(xml_text)
     items = []
     
-    # Check if Atom or RSS
     if root.tag.endswith('feed'):
-        # Atom feed
         entries = root.findall('atom:entry', NAMESPACES) or root.findall('.//entry')
         for entry in entries:
             try:
@@ -136,7 +162,6 @@ def parse_rss_feed_xml(xml_text: str, feed_id: int):
             except Exception:
                 continue
     else:
-        # RSS 2.0
         channel = root.find('channel') or root
         rss_items = channel.findall('item')
         for item_el in rss_items:
@@ -156,13 +181,6 @@ def parse_rss_feed_xml(xml_text: str, feed_id: int):
                 author_el = item_el.find('dc:creator', NAMESPACES) or item_el.find('author')
                 author = author_el.text.strip() if (author_el is not None and author_el.text) else "Autor"
                 
-                # Check for audio podcast enclosure
-                enclosure = item_el.find('enclosure')
-                content_type = "article"
-                if enclosure is not None and 'audio' in enclosure.get('type', ''):
-                    content_type = "audio"
-                
-                # Content encoded or description
                 content_encoded = item_el.find('content:encoded', NAMESPACES)
                 raw_html = content_encoded.text if (content_encoded is not None and content_encoded.text) else ""
                 if not raw_html:
@@ -178,7 +196,7 @@ def parse_rss_feed_xml(xml_text: str, feed_id: int):
                     "url": url,
                     "author": author,
                     "published_at": published_at,
-                    "content_type": content_type,
+                    "content_type": "article",
                     "video_id": None,
                     "thumbnail_url": "",
                     "raw_content": cleaned["text"],
@@ -190,10 +208,6 @@ def parse_rss_feed_xml(xml_text: str, feed_id: int):
     return items
 
 def parse_opml(opml_content: str):
-    """
-    Parses an OPML XML string (exported from YouTube, Feedly, etc.)
-    and returns a list of discovered feeds.
-    """
     root = ET.fromstring(opml_content)
     feeds = []
     
@@ -226,9 +240,6 @@ def parse_opml(opml_content: str):
     return feeds
 
 def register_feed(title: str, feed_url: str, feed_type: str = "youtube", category: str = "General", site_url: str = ""):
-    """
-    Adds a new feed to the database.
-    """
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -253,9 +264,6 @@ def register_feed(title: str, feed_url: str, feed_type: str = "youtube", categor
         raise e
 
 def save_items_to_db(items: list):
-    """
-    Inserts or ignores items in the database.
-    """
     conn = get_db_connection()
     cursor = conn.cursor()
     inserted_count = 0
@@ -281,15 +289,3 @@ def save_items_to_db(items: list):
     conn.commit()
     conn.close()
     return inserted_count
-
-if __name__ == "__main__":
-    sample_opml = """<?xml version="1.0" encoding="UTF-8"?>
-    <opml version="1.0">
-        <head><title>YouTube Subscriptions</title></head>
-        <body>
-            <outline text="AI Research" title="AI Research" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-BIpcydg64z4HQ" />
-            <outline text="PKM Notes" title="PKM Notes" type="rss" xmlUrl="https://subdomain.substack.com/feed" />
-        </body>
-    </opml>"""
-    feeds = parse_opml(sample_opml)
-    print(f"Parsed {len(feeds)} feeds from OPML sample:", feeds)

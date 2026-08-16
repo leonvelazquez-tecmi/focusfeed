@@ -6,9 +6,6 @@ from datetime import datetime
 from app.db import get_db_connection
 
 def get_user_profile():
-    """
-    Retrieves user profile topics and evaluation criteria.
-    """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM user_profile LIMIT 1")
@@ -20,12 +17,13 @@ def get_user_profile():
             "focus_topics": [
                 "Inteligencia Artificial Aplicada y Sistemas Agénticos",
                 "Gestión del Conocimiento Personal (PKM, Obsidian, Zettelkasten)",
-                "Transformación Institucional y Estrategia Educativa"
+                "Transformación Institucional y Modelos Educativos",
+                "Cine de autor y narrativa visual",
+                "Música contemporánea y cultura del vinilo"
             ],
             "system_prompt_criteria": "Prioriza profundidad conceptual, rigor metodológico y valor accionable.",
             "min_relevance_threshold": 60,
-            "obsidian_vault_name": "ObsidianVault",
-            "obsidian_folder": "CuratedFeed"
+            "learned_preferences": {"boosted_authors": [], "boosted_tags": {}, "penalized_tags": {}}
         }
         
     try:
@@ -33,37 +31,109 @@ def get_user_profile():
     except Exception:
         topics = []
         
+    try:
+        learned = json.loads(row["learned_preferences"]) if row["learned_preferences"] else {}
+    except Exception:
+        learned = {}
+        
     return {
         "focus_topics": topics,
         "system_prompt_criteria": row["system_prompt_criteria"] or "",
         "min_relevance_threshold": row["min_relevance_threshold"] or 60,
-        "obsidian_vault_name": row["obsidian_vault_name"] or "ObsidianVault",
-        "obsidian_folder": row["obsidian_folder"] or "CuratedFeed",
+        "learned_preferences": learned,
         "api_key_gemini": row["api_key_gemini"] or os.environ.get("GEMINI_API_KEY", ""),
         "api_key_openai": row["api_key_openai"] or os.environ.get("OPENAI_API_KEY", "")
     }
 
+def record_feedback(item_id: int, rating: str, comment: str = ""):
+    """
+    Saves user rating ('love', 'like', 'dislike', 'none') and feedback comments,
+    and dynamically adapts learned preferences.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    UPDATE items SET
+        user_rating = ?,
+        user_feedback_comment = ?,
+        feedback_at = ?
+    WHERE id = ?
+    """, (rating, comment, datetime.utcnow().isoformat(), item_id))
+    
+    # Fetch item metadata to update learned preference matrix
+    cursor.execute("SELECT * FROM items WHERE id = ?", (item_id,))
+    item = cursor.fetchone()
+    
+    if item:
+        profile = get_user_profile()
+        learned = profile.get("learned_preferences", {})
+        boosted_authors = set(learned.get("boosted_authors", []))
+        boosted_tags = learned.get("boosted_tags", {})
+        penalized_tags = learned.get("penalized_tags", {})
+        
+        try:
+            tags = json.loads(item["topic_tags"]) if item["topic_tags"] else []
+        except Exception:
+            tags = []
+            
+        author = item["author"]
+        
+        if rating in ["love", "like"]:
+            if author:
+                boosted_authors.add(author)
+            weight = 2 if rating == "love" else 1
+            for t in tags:
+                boosted_tags[t] = boosted_tags.get(t, 0) + weight
+                if t in penalized_tags:
+                    penalized_tags[t] = max(0, penalized_tags[t] - 1)
+        elif rating == "dislike":
+            if author in boosted_authors:
+                boosted_authors.remove(author)
+            for t in tags:
+                penalized_tags[t] = penalized_tags.get(t, 0) + 2
+                if t in boosted_tags:
+                    boosted_tags[t] = max(0, boosted_tags[t] - 1)
+                    
+        updated_learned = {
+            "boosted_authors": list(boosted_authors),
+            "boosted_tags": boosted_tags,
+            "penalized_tags": penalized_tags
+        }
+        
+        cursor.execute("""
+        UPDATE user_profile SET
+            learned_preferences = ?,
+            updated_at = ?
+        WHERE id = 1
+        """, (json.dumps(updated_learned, ensure_ascii=False), datetime.utcnow().isoformat()))
+        
+    conn.commit()
+    conn.close()
+
 def analyze_with_llm(title: str, author: str, content_type: str, content_text: str, profile: dict) -> dict:
-    """
-    Analyzes content against user focus topics using Gemini / OpenAI API if available,
-    or falls back to an intelligent semantic heuristic engine.
-    """
     topics_list = profile["focus_topics"]
     criteria = profile["system_prompt_criteria"]
+    learned = profile.get("learned_preferences", {})
     
     api_key_gemini = profile.get("api_key_gemini")
     
-    # If Gemini API key is available, call Google Gemini Flash
     if api_key_gemini:
         try:
-            prompt = f"""Eres un curador de información ejecutivo para un Director de Planeación y Transformación.
-Evalúa el siguiente contenido y responde ESTRICTAMENTE en formato JSON válido.
+            prompt = f"""Eres el curador personal de contenido para León Velázquez.
+Evalúa este material contra sus intereses y su historial de aprendizaje adaptativo.
+Responde ÚNICAMENTE en formato JSON.
 
-PERFIL DE INTERESES DEL USUARIO:
+ÁREAS DE INTERÉS PRINCIPALES:
 {json.dumps(topics_list, ensure_ascii=False, indent=2)}
 
 CRITERIO EDITORIAL:
 {criteria}
+
+PREFERENCIAS APRENDIDAS (Basadas en feedback real):
+- Autores favoritos: {', '.join(learned.get('boosted_authors', []))}
+- Temas con feedback muy positivo: {json.dumps(learned.get('boosted_tags', {}), ensure_ascii=False)}
+- Temas que suele descartar: {json.dumps(learned.get('penalized_tags', {}), ensure_ascii=False)}
 
 CONTENIDO A EVALUAR:
 - Título: {title}
@@ -72,17 +142,16 @@ CONTENIDO A EVALUAR:
 - Texto / Transcripción:
 {content_text[:6000]}
 
-Tu respuesta DEBE ser un único objeto JSON con esta estructura exacta:
+Tu respuesta DEBE ser este JSON exacto:
 {{
-  "relevance_score": (entero de 0 a 100),
-  "summary_tldr": "Resumen ejecutivo de 2 a 3 párrafos claros y sustanciosos.",
+  "relevance_score": (número entero de 0 a 100),
+  "summary_tldr": "Resumen conciso y fluido de 2 párrafos.",
   "key_takeaways": [
     "Idea clave 1",
     "Idea clave 2",
-    "Idea clave 3",
-    "Idea clave 4"
+    "Idea clave 3"
   ],
-  "curator_note": "1 frase concisa explicando exactamente por qué este material se alinea o no con los intereses del usuario.",
+  "curator_note": "1 frase concisa de por qué vale la pena verlo.",
   "topic_tags": ["Etiqueta1", "Etiqueta2"]
 }}
 """
@@ -96,77 +165,76 @@ Tu respuesta DEBE ser un único objeto JSON con esta estructura exacta:
             with urllib.request.urlopen(req, timeout=12) as response:
                 result_data = json.loads(response.read().decode('utf-8'))
                 raw_text = result_data["candidates"][0]["content"]["parts"][0]["text"]
-                parsed = json.loads(raw_text)
-                return parsed
+                return json.loads(raw_text)
         except Exception:
             pass
 
-    # Intelligent Semantic Evaluator (Deterministic & Robust Local Heuristic Engine)
-    # Analyzes topic alignment, keyword density, depth indicators, and structured extraction
+    # Heuristic Engine with Learned Preferences Integration
     combined_text = f"{title} {author} {content_text}".lower()
-    
-    score_base = 50
+    score_base = 52
     matched_tags = []
     relevance_reasons = []
     
     topic_keywords = {
-        "Sistemas-Agénticos": ["agente", "agent", "agéntico", "llm", "ia", "ai", "prompt", "mcp", "workflow", "automati", "modelo"],
-        "PKM-Obsidian": ["obsidian", "pkm", "knowledge", "zettelkasten", "second brain", "nota", "vault", "organi", "markdown"],
-        "Estrategia-Educativa": ["educa", "universidad", "modelo", "aprendizaje", "competencia", "docen", "estrat", "transforma"],
-        "Cine-Narrativa": ["cine", "película", "director", "filme", "nolan", "guion", "fotografía", "narrativa"],
-        "Música-Cultura": ["música", "vinilo", "álbum", "banda", "concierto", "indie", "reseña", "sonido"],
-        "Enología-Gastronomía": ["vino", "enología", "maridaje", "cocina", "gastronomía", "uva", "cata"]
+        "IA & Agentes": ["agente", "agent", "agéntico", "llm", "ia", "ai", "prompt", "mcp", "workflow", "automati", "modelo"],
+        "PKM & Notas": ["obsidian", "pkm", "knowledge", "zettelkasten", "second brain", "nota", "vault", "organi", "markdown"],
+        "Educación & Estrategia": ["educa", "universidad", "modelo", "aprendizaje", "competencia", "docen", "estrat", "transforma", "fit", "maps"],
+        "Cine & Narrativa": ["cine", "película", "director", "filme", "nolan", "guion", "fotografía", "narrativa", "formato"],
+        "Música & Cultura": ["música", "vinilo", "álbum", "banda", "concierto", "indie", "reseña", "post-punk", "sonido"],
+        "Enología & Gourmet": ["vino", "enología", "maridaje", "cocina", "gastronomía", "uva", "cata", "thermomix"]
     }
     
     for tag, kws in topic_keywords.items():
         hits = sum(1 for kw in kws if kw in combined_text)
         if hits >= 2:
             matched_tags.append(tag)
-            score_base += min(hits * 12, 35)
-            relevance_reasons.append(tag.replace("-", " "))
+            score_base += min(hits * 12, 36)
+            relevance_reasons.append(tag)
             
-    # Penalize clickbait / low depth indicators
-    clickbait_words = ["shocking", "increíble", "no creerás", "you won't believe", "hack definitivo", "1000x"]
-    for cb in clickbait_words:
-        if cb in title.lower():
-            score_base -= 15
-            
-    # Boost if author is a recognized high-signal source or clean technical terms
-    if any(k in combined_text for k in ["análisis", "framework", "arquitectura", "metodología", "investigación", "deep dive"]):
-        score_base += 12
+    # Apply Learned Preferences Boosts / Penalties
+    boosted_authors = learned.get("boosted_authors", [])
+    if any(ba.lower() in author.lower() for ba in boosted_authors):
+        score_base += 15
+        relevance_reasons.append(f"Canal favorito ({author})")
         
-    final_score = max(10, min(99, score_base))
-    
-    # Generate structured summary and takeaways from content
+    boosted_tags = learned.get("boosted_tags", {})
+    for t, weight in boosted_tags.items():
+        if t in matched_tags:
+            score_base += min(weight * 5, 20)
+            
+    penalized_tags = learned.get("penalized_tags", {})
+    for t, weight in penalized_tags.items():
+        if t in matched_tags:
+            score_base -= min(weight * 8, 25)
+
+    # Clean summary and takeaways
     clean_lines = [l.strip() for l in content_text.split("\n") if len(l.strip()) > 35]
-    if len(clean_lines) >= 3:
-        p1 = clean_lines[0]
-        p2 = clean_lines[1]
-        summary_tldr = f"{p1}\n\n{p2}"
+    if len(clean_lines) >= 2:
+        summary_tldr = f"{clean_lines[0]}\n\n{clean_lines[1]}"
     elif content_text.strip():
-        summary_tldr = content_text.strip()[:400] + ("..." if len(content_text) > 400 else "")
+        summary_tldr = content_text.strip()[:350] + ("..." if len(content_text) > 350 else "")
     else:
-        summary_tldr = f"Análisis de contenido publicado por {author} sobre {title}."
+        summary_tldr = f"Análisis publicado por {author} sobre {title}."
         
-    # Generate takeaways
     takeaways = []
     if len(clean_lines) >= 4:
-        for line in clean_lines[2:6]:
+        for line in clean_lines[2:5]:
             takeaways.append(line[:120].strip(" -•*"))
-    if len(takeaways) < 3:
+    if len(takeaways) < 2:
         takeaways = [
-            f"Presentación de perspectivas clave por {author}.",
-            f"Relevancia directa con temáticas de {', '.join(matched_tags) if matched_tags else 'interés general'}.",
-            "Enfoque analítico aplicable para revisión y síntesis en flujo personal."
+            f"Análisis clave presentado por {author}.",
+            f"Conexión directa con {', '.join(matched_tags) if matched_tags else 'tus temas prioritarios'}."
         ]
         
+    final_score = max(15, min(99, score_base))
+    
     if relevance_reasons:
-        curator_note = f"Alta afinidad con tus áreas de enfoque en {', '.join(relevance_reasons)}."
+        curator_note = f"Alta afinidad con {', '.join(relevance_reasons[:2])}."
     else:
-        curator_note = "Contenido complementario de tus canales suscritos con potencial de exploración."
+        curator_note = f"Publicación de {author} relevante para explorar."
         
     if not matched_tags:
-        matched_tags = ["General", "Suscripción"]
+        matched_tags = ["Lecturas"]
         
     return {
         "relevance_score": final_score,
@@ -177,9 +245,6 @@ Tu respuesta DEBE ser un único objeto JSON con esta estructura exacta:
     }
 
 def process_item_ai(item_id: int):
-    """
-    Enriches a single item in the database with AI score and summary.
-    """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM items WHERE id = ?", (item_id,))
@@ -190,8 +255,6 @@ def process_item_ai(item_id: int):
         return None
         
     profile = get_user_profile()
-    
-    # Prepare text payload
     content_text = item["transcript"] or item["raw_content"] or item["title"]
     
     analysis = analyze_with_llm(
@@ -221,15 +284,11 @@ def process_item_ai(item_id: int):
         datetime.utcnow().isoformat(),
         item_id
     ))
-    
     conn.commit()
     conn.close()
     return analysis
 
 def process_all_pending_items(limit: int = 20):
-    """
-    Processes all items with ai_processed = 0.
-    """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM items WHERE ai_processed = 0 ORDER BY published_at DESC LIMIT ?", (limit,))
@@ -240,17 +299,4 @@ def process_all_pending_items(limit: int = 20):
     for r in rows:
         process_item_ai(r["id"])
         processed += 1
-        
     return processed
-
-if __name__ == "__main__":
-    prof = get_user_profile()
-    print("User profile loaded:", prof["focus_topics"][:2])
-    test_res = analyze_with_llm(
-        title="Construyendo Sistemas Agénticos con Python y Obsidian",
-        author="Canal de IA Avanzada",
-        content_type="video",
-        content_text="En este video explicamos cómo estructurar agentes con memoria a largo plazo en Markdown y vaults de Obsidian.",
-        profile=prof
-    )
-    print("Test AI Result:\n", json.dumps(test_res, ensure_ascii=False, indent=2))

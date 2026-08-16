@@ -5,27 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>FocusFeed — Tu Feed Inteligente</title>
+  <title>FocusFeed</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            serif: ['Newsreader', 'Georgia', 'serif'],
+          },
           colors: {
-            brand: {
-              50: '#eef2ff',
-              500: '#6366f1',
-              600: '#4f46e5',
-              700: '#4338ca',
-            },
-            surface: {
-              950: '#0b0f17',
-              900: '#111827',
-              850: '#182234',
-              800: '#1f2937',
-              700: '#374151',
-              600: '#4b5563'
+            app: {
+              bg: '#000000',
+              card: '#121212',
+              cardHover: '#1a1a1a',
+              border: '#242424',
+              subtle: '#333333',
+              accent: '#3b82f6',
+              accentLight: '#60a5fa',
+              success: '#10b981',
+              youtube: '#ff0000',
+              text: '#f3f4f6',
+              muted: '#9ca3af'
             }
           }
         }
@@ -34,187 +40,246 @@
   </script>
   <style>
     body {
-      padding-top: env(safe-area-inset-top);
-      padding-bottom: env(safe-area-inset-bottom);
+      padding-top: max(env(safe-area-inset-top), 12px);
+      padding-bottom: max(env(safe-area-inset-bottom), 72px);
       -webkit-tap-highlight-color: transparent;
+      background-color: #000000;
+      color: #f3f4f6;
     }
-    .line-clamp-2 {
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
+    .custom-scrollbar::-webkit-scrollbar { display: none; }
+    .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .bottom-nav-safe {
+      padding-bottom: max(env(safe-area-inset-bottom), 14px);
     }
   </style>
 </head>
-<body class="bg-surface-950 text-slate-100 min-h-screen font-sans flex flex-col antialiased">
+<body class="font-sans min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
 
-  <!-- Main Top Bar -->
-  <header class="sticky top-0 z-30 bg-surface-900/95 backdrop-blur-md border-b border-surface-800 px-4 py-3">
-    <div class="max-w-3xl mx-auto flex items-center justify-between">
-      <div class="flex items-center space-x-2.5">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-950">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
+  <!-- Top Native Navigation Bar -->
+  <header class="sticky top-0 z-40 bg-black/90 backdrop-blur-xl border-b border-app-border/80 px-4 py-2.5">
+    <div class="max-w-2xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-950">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         </div>
         <div>
-          <h1 class="text-base font-bold text-white leading-none">FocusFeed</h1>
-          <p class="text-[11px] text-slate-400 mt-0.5">Tus suscripciones filtradas por IA</p>
+          <h1 class="text-base font-extrabold tracking-tight text-white flex items-center gap-1.5">
+            FocusFeed
+          </h1>
         </div>
       </div>
-      
-      <!-- Top Action Buttons -->
-      <div class="flex items-center space-x-2">
-        <button onclick="syncFeeds()" id="sync-btn" class="px-3 py-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-200 text-xs font-medium border border-surface-700 transition flex items-center gap-1.5 shadow-sm">
-          <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          <span>Actualizar</span>
-        </button>
 
-        <button onclick="openModal('modal-add-feed')" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition flex items-center gap-1 shadow-sm shadow-indigo-950">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-          <span class="hidden sm:inline">Agregar Canal</span>
+      <!-- Quick Action Icons -->
+      <div class="flex items-center space-x-1.5">
+        <button onclick="syncFeeds()" id="sync-btn" title="Actualizar feeds" class="w-8 h-8 rounded-full bg-app-card hover:bg-app-cardHover flex items-center justify-center text-slate-300 border border-app-border transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
-
-        <button onclick="openModal('modal-settings')" title="Configurar Intereses" class="p-2 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 border border-surface-700 transition">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <button onclick="openModal('modal-add')" title="Agregar canal o OPML" class="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-950 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- Clean Tabs Navigation -->
-  <nav class="bg-surface-900/80 border-b border-surface-800 px-4 py-2 sticky top-[57px] z-20 backdrop-blur">
-    <div class="max-w-3xl mx-auto flex items-center justify-between gap-2 overflow-x-auto">
-      <div class="flex space-x-1.5 text-xs font-medium">
-        <button onclick="setTab('curated')" id="tab-curated" class="px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold flex items-center gap-1.5 transition">
-          <span>🔥</span> Recomendados para ti
+  <!-- Feedly/Substack Style Category & Filter Chips -->
+  <section class="sticky top-[53px] z-30 bg-black/95 backdrop-blur-xl border-b border-app-border px-4 py-2">
+    <div class="max-w-2xl mx-auto flex items-center justify-between gap-2 overflow-x-auto custom-scrollbar">
+      <div class="flex items-center space-x-2 text-xs font-semibold">
+        <button onclick="setTab('curated')" id="tab-curated" class="px-3.5 py-1.5 rounded-full bg-white text-black font-bold flex items-center gap-1.5 shadow-sm transition">
+          <span>✦</span> Para ti (IA)
         </button>
-        <button onclick="setTab('reading')" id="tab-reading" class="px-3.5 py-1.5 rounded-lg bg-surface-800 text-slate-300 hover:bg-surface-700 transition flex items-center gap-1.5">
+        <button onclick="setTab('reading')" id="tab-reading" class="px-3.5 py-1.5 rounded-full bg-app-card text-slate-400 hover:text-white border border-app-border transition flex items-center gap-1">
           <span>🔖</span> Guardados (<span id="count-reading">0</span>)
         </button>
-        <button onclick="setTab('inbox')" id="tab-inbox" class="px-3.5 py-1.5 rounded-lg bg-surface-800 text-slate-300 hover:bg-surface-700 transition flex items-center gap-1.5">
-          <span>📥</span> Todo lo nuevo
-        </button>
-        <button onclick="setTab('archived')" id="tab-archived" class="px-3.5 py-1.5 rounded-lg bg-surface-800 text-slate-300 hover:bg-surface-700 transition">
-          <span>✓</span> Vistos
+        <button onclick="setTab('inbox')" id="tab-inbox" class="px-3.5 py-1.5 rounded-full bg-app-card text-slate-400 hover:text-white border border-app-border transition flex items-center gap-1">
+          <span>📥</span> Todo
         </button>
       </div>
 
-      <div class="shrink-0">
-        <select id="filter-type" onchange="loadItems()" class="bg-surface-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 border border-surface-700 outline-none">
-          <option value="all">Todo</option>
-          <option value="video">Solo Videos</option>
-          <option value="article">Solo Artículos</option>
-        </select>
-      </div>
+      <!-- Type Filter -->
+      <select id="filter-type" onchange="loadItems()" class="bg-app-card text-slate-300 text-xs rounded-full px-2.5 py-1 border border-app-border outline-none shrink-0">
+        <option value="all">Todo</option>
+        <option value="video">Videos</option>
+        <option value="article">Artículos</option>
+      </select>
     </div>
-  </nav>
+  </section>
 
-  <!-- Feed Container -->
-  <main class="flex-1 max-w-3xl w-full mx-auto p-4 sm:p-6 space-y-4">
-    <!-- Active Focus Banner -->
-    <div class="bg-surface-900 border border-surface-800 rounded-xl p-3 flex items-center justify-between text-xs text-slate-300">
+  <!-- Main Feed Stream -->
+  <main class="flex-1 max-w-2xl w-full mx-auto px-4 py-4 space-y-6">
+    <!-- Active Learning Profile Pill / Topic Indicator -->
+    <div class="bg-gradient-to-r from-blue-950/30 via-app-card to-app-card border border-blue-500/20 rounded-2xl p-3.5 flex items-center justify-between text-xs text-slate-300">
       <div class="flex items-center space-x-2.5">
-        <span class="text-indigo-400 text-base">🎯</span>
+        <span class="text-blue-400 text-base">🧠</span>
         <div>
-          <span class="text-slate-200 font-medium">Priorizando por tus temas:</span>
-          <span id="active-topics-summary" class="text-slate-400 text-[11px] block sm:inline">IA Agéntica, PKM, Educación, Cine...</span>
+          <span class="font-bold text-white">IA con Aprendizaje Activo:</span>
+          <span id="learning-summary" class="text-slate-400 text-[11px] block">Califica con ❤️ o 👎 para entrenar tus recomendaciones.</span>
         </div>
       </div>
-      <button onclick="openModal('modal-settings')" class="text-indigo-400 hover:text-indigo-300 font-medium text-[11px] shrink-0 ml-2">
-        Editar temas
+      <button onclick="openModal('modal-learned')" class="text-blue-400 hover:text-blue-300 font-semibold text-[11px] shrink-0 ml-2 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20">
+        Ver perfil IA
       </button>
     </div>
 
-    <!-- Feed Items List -->
-    <div id="items-list" class="space-y-4">
-      <div class="text-center py-12 text-slate-500 text-xs">Cargando contenido...</div>
+    <!-- Feed Cards Container -->
+    <div id="items-list" class="space-y-6">
+      <div class="text-center py-16 text-slate-500 text-xs">Cargando tu feed curado...</div>
     </div>
   </main>
 
-  <!-- Modal: Agregar Canal o Importar OPML -->
-  <div id="modal-add-feed" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-surface-900 border border-surface-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-surface-800 pb-3">
-        <h3 class="text-sm font-bold text-white flex items-center gap-2">
-          <span>➕</span> Agregar Canales o Suscripciones
-        </h3>
-        <button onclick="closeModal('modal-add-feed')" class="p-1 rounded hover:bg-surface-800 text-slate-400">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-        </button>
-      </div>
-
-      <!-- Add Single URL -->
-      <div class="space-y-2 text-xs">
-        <label class="text-slate-300 font-medium block">Pega el link de un canal de YouTube, Blog o Substack:</label>
-        <input type="text" id="add-feed-url" placeholder="https://www.youtube.com/@Canal o RSS" class="w-full bg-surface-950 border border-surface-700 rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-indigo-500 text-xs">
-        <input type="text" id="add-feed-title" placeholder="Nombre opcional (ej. Andrej Karpathy)" class="w-full bg-surface-950 border border-surface-700 rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-indigo-500 text-xs">
-        
-        <button onclick="addSingleFeed()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 rounded-xl transition text-xs">
-          Agregar y Procesar
-        </button>
-      </div>
-
-      <!-- OPML Import -->
-      <div class="border-t border-surface-800 pt-3 text-xs space-y-2">
-        <div class="flex items-center justify-between">
-          <span class="font-medium text-slate-300">¿Tienes un archivo OPML de YouTube?</span>
-        </div>
-        <textarea id="opml-raw" rows="3" placeholder="Pega aquí el contenido del archivo OPML..." class="w-full bg-surface-950 border border-surface-700 rounded-xl p-2.5 font-mono text-[10px] text-slate-300 outline-none"></textarea>
-        <button onclick="importOpmlText()" class="w-full bg-surface-800 hover:bg-surface-700 text-slate-200 font-medium py-1.5 rounded-xl border border-surface-700 transition text-xs">
-          Importar todas las suscripciones
-        </button>
-      </div>
+  <!-- Bottom Native Tab Bar (iOS style) -->
+  <footer class="fixed bottom-0 left-0 right-0 z-40 bg-black/95 backdrop-blur-2xl border-t border-app-border bottom-nav-safe">
+    <div class="max-w-2xl mx-auto flex items-center justify-around py-1.5 text-[10px] font-medium text-slate-400">
+      <button onclick="setTab('curated')" class="flex flex-col items-center gap-1 text-white">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
+        <span>Para ti</span>
+      </button>
+      <button onclick="setTab('reading')" class="flex flex-col items-center gap-1 hover:text-white transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+        <span>Guardados</span>
+      </button>
+      <button onclick="setTab('inbox')" class="flex flex-col items-center gap-1 hover:text-white transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        <span>Todos</span>
+      </button>
+      <button onclick="openModal('modal-learned')" class="flex flex-col items-center gap-1 hover:text-white transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        <span>IA & Gustos</span>
+      </button>
     </div>
-  </div>
+  </footer>
 
-  <!-- Modal: Configuración de Intereses -->
-  <div id="modal-settings" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-surface-900 border border-surface-800 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-surface-800 pb-3">
+  <!-- Modal: Calificar / Entrenar IA para un Item -->
+  <div id="modal-feedback" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-app-card border border-app-border rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-app-border pb-3">
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
-          <span>⚙️</span> Tus Temas de Enfoque (IA)
+          <span>⭐</span> Calificar y Entrenar Curador IA
         </h3>
-        <button onclick="closeModal('modal-settings')" class="p-1 rounded hover:bg-surface-800 text-slate-400">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        <button onclick="closeModal('modal-feedback')" class="p-1 text-slate-400 hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
       <div class="space-y-3 text-xs">
-        <p class="text-slate-400 leading-relaxed">
-          La IA evalúa cada video y artículo nuevo de tus canales contra estos temas para decidir qué mostrarte primero y explicarte por qué vale la pena verlo:
-        </p>
-
         <div>
-          <label class="font-semibold text-slate-300 block mb-1">Temas prioritarios (uno por línea):</label>
-          <textarea id="settings-topics" rows="5" class="w-full bg-surface-950 border border-surface-700 rounded-xl p-3 text-slate-200 text-xs leading-relaxed outline-none focus:border-indigo-500"></textarea>
+          <p id="feedback-item-title" class="font-bold text-slate-200 text-xs line-clamp-1 mb-2">Título</p>
+          <div class="flex items-center justify-around bg-black/60 p-2.5 rounded-xl border border-app-border">
+            <button onclick="selectQuickRating('love')" id="rate-btn-love" class="px-3 py-2 rounded-lg hover:bg-app-card flex flex-col items-center gap-1 transition">
+              <span class="text-xl">❤️</span>
+              <span class="text-[10px] text-slate-300">Me encanta</span>
+            </button>
+            <button onclick="selectQuickRating('like')" id="rate-btn-like" class="px-3 py-2 rounded-lg hover:bg-app-card flex flex-col items-center gap-1 transition">
+              <span class="text-xl">👍</span>
+              <span class="text-[10px] text-slate-300">Relevante</span>
+            </button>
+            <button onclick="selectQuickRating('dislike')" id="rate-btn-dislike" class="px-3 py-2 rounded-lg hover:bg-app-card flex flex-col items-center gap-1 transition">
+              <span class="text-xl">👎</span>
+              <span class="text-[10px] text-slate-300">No relevante</span>
+            </button>
+          </div>
         </div>
 
         <div>
-          <label class="font-semibold text-slate-300 block mb-1">Instrucciones para la IA (Criterio editorial):</label>
-          <textarea id="settings-criteria" rows="2" class="w-full bg-surface-950 border border-surface-700 rounded-xl p-3 text-slate-200 text-xs leading-relaxed outline-none focus:border-indigo-500"></textarea>
+          <label class="font-semibold text-slate-300 block mb-1">Comentario o Instrucción para la IA (opcional):</label>
+          <textarea id="feedback-comment" rows="3" placeholder="Ej: Me interesan mucho estos análisis técnicos, pero con menos enfoque en noticias del día..." class="w-full bg-black border border-app-border rounded-xl p-3 text-slate-200 text-xs outline-none focus:border-blue-500"></textarea>
         </div>
 
-        <button onclick="saveSettings()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 rounded-xl transition text-xs">
-          Guardar y Re-calibrar Feed
+        <button onclick="submitItemFeedback()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-lg shadow-blue-950">
+          Guardar y Calibrar IA
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Toast Message -->
-  <div id="toast" class="fixed bottom-5 right-5 z-50 bg-surface-800 border border-surface-700 text-slate-200 text-xs px-4 py-2.5 rounded-xl shadow-xl transform translate-y-16 opacity-0 transition duration-200 flex items-center gap-2">
+  <!-- Modal: Agregar Canales / OPML -->
+  <div id="modal-add" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-app-card border border-app-border rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-app-border pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span>➕</span> Agregar Suscripciones
+        </h3>
+        <button onclick="closeModal('modal-add')" class="p-1 text-slate-400 hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="text-slate-300 font-medium block mb-1">Pega el link de un canal de YouTube, Blog o Substack:</label>
+          <input type="text" id="feed-url-input" placeholder="https://www.youtube.com/@AndrejKarpathy o RSS" class="w-full bg-black border border-app-border rounded-xl px-3 py-2.5 text-slate-200 text-xs outline-none focus:border-blue-500">
+        </div>
+        <button onclick="addSingleFeed()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs">
+          + Agregar Canal
+        </button>
+
+        <div class="border-t border-app-border pt-3 space-y-2">
+          <label class="text-slate-400 font-medium block">O pega el contenido de tu archivo OPML (Feedly / YouTube):</label>
+          <textarea id="opml-input" rows="3" placeholder="<opml version='1.0'>...</textarea>" class="w-full bg-black border border-app-border rounded-xl p-2.5 font-mono text-[10px] text-slate-300 outline-none"></textarea>
+          <button onclick="importOpml()" class="w-full bg-app-subtle hover:bg-slate-700 text-white font-semibold py-2 rounded-xl transition text-xs">
+            Importar todas las suscripciones
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Ver qué ha aprendido la IA -->
+  <div id="modal-learned" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-app-card border border-app-border rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar">
+      <div class="flex items-center justify-between border-b border-app-border pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span>🧠</span> Preferencias Aprendidas por la IA
+        </h3>
+        <button onclick="closeModal('modal-learned')" class="p-1 text-slate-400 hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <p class="text-slate-400 leading-relaxed">
+          FocusFeed va construyendo un perfil dinámico basado en tus calificaciones (❤️ / 👎). Así es como la IA pondera el contenido:
+        </p>
+
+        <div class="bg-black/60 p-3 rounded-xl border border-app-border space-y-2">
+          <h4 class="font-bold text-emerald-400 text-xs">🏆 Canales y Autores con Boost Positivo</h4>
+          <div id="learned-authors-list" class="flex flex-wrap gap-1.5 text-[11px]">
+            <!-- Dynamic tags -->
+          </div>
+        </div>
+
+        <div class="bg-black/60 p-3 rounded-xl border border-app-border space-y-2">
+          <h4 class="font-bold text-blue-400 text-xs">🎯 Temas con Mayor Afinidad</h4>
+          <div id="learned-tags-list" class="flex flex-wrap gap-1.5 text-[11px]">
+            <!-- Dynamic tags -->
+          </div>
+        </div>
+
+        <div class="bg-black/60 p-3 rounded-xl border border-app-border space-y-2">
+          <h4 class="font-bold text-slate-300 text-xs">📝 Temas Base de Enfoque</h4>
+          <textarea id="edit-focus-topics" rows="4" class="w-full bg-black border border-app-border rounded-xl p-2.5 text-slate-200 text-xs outline-none"></textarea>
+          <button onclick="saveTopicsFromModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-xl text-xs">
+            Actualizar Temas
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed top-5 right-5 z-50 bg-app-card border border-app-border text-white text-xs px-4 py-2.5 rounded-full shadow-2xl transform -translate-y-16 opacity-0 transition duration-200 flex items-center gap-2">
     <span id="toast-icon">✓</span>
-    <span id="toast-msg">Notificación</span>
+    <span id="toast-msg">Mensaje</span>
   </div>
 
   <script>
     let currentTab = 'curated';
     let cachedItems = [];
+    let activeFeedbackItemId = null;
+    let selectedRating = 'love';
 
     async function init() {
-      await loadSettings();
+      await loadProfile();
       await loadItems();
     }
 
@@ -222,28 +287,24 @@
       const toast = document.getElementById('toast');
       document.getElementById('toast-msg').innerText = msg;
       document.getElementById('toast-icon').innerText = icon;
-      toast.classList.remove('translate-y-16', 'opacity-0');
+      toast.classList.remove('-translate-y-16', 'opacity-0');
       setTimeout(() => {
-        toast.classList.add('translate-y-16', 'opacity-0');
+        toast.classList.add('-translate-y-16', 'opacity-0');
       }, 2500);
     }
 
-    function openModal(id) {
-      document.getElementById(id).classList.remove('hidden');
-    }
-
-    function closeModal(id) {
-      document.getElementById(id).classList.add('hidden');
-    }
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
     function setTab(tab) {
       currentTab = tab;
-      ['curated', 'reading', 'inbox', 'archived'].forEach(t => {
+      ['curated', 'reading', 'inbox'].forEach(t => {
         const btn = document.getElementById(`tab-${t}`);
+        if (!btn) return;
         if (t === tab) {
-          btn.className = "px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold flex items-center gap-1.5 transition shadow-sm";
+          btn.className = "px-3.5 py-1.5 rounded-full bg-white text-black font-bold flex items-center gap-1.5 shadow-sm transition";
         } else {
-          btn.className = "px-3.5 py-1.5 rounded-lg bg-surface-800 text-slate-300 hover:bg-surface-700 transition flex items-center gap-1.5";
+          btn.className = "px-3.5 py-1.5 rounded-full bg-app-card text-slate-400 hover:text-white border border-app-border transition flex items-center gap-1";
         }
       });
       loadItems();
@@ -252,31 +313,31 @@
     async function loadItems() {
       const typeFilter = document.getElementById('filter-type').value;
       const listEl = document.getElementById('items-list');
-      listEl.innerHTML = '<div class="text-center py-12 text-slate-500 text-xs">Cargando feed...</div>';
+      listEl.innerHTML = '<div class="text-center py-16 text-slate-500 text-xs">Cargando tu feed curado...</div>';
 
       try {
         const res = await fetch(`/api/items?tab=${currentTab}&type=${typeFilter}`);
         const data = await res.json();
         cachedItems = data.items || [];
-        
+
         if (data.counts) {
           document.getElementById('count-reading').innerText = data.counts.reading || 0;
         }
 
-        renderItems(cachedItems);
+        renderFeed(cachedItems);
       } catch (err) {
-        listEl.innerHTML = `<div class="text-center py-8 text-red-400 text-xs">Error al cargar contenido: ${err.message}</div>`;
+        listEl.innerHTML = `<div class="text-center py-8 text-red-400 text-xs">Error: ${err.message}</div>`;
       }
     }
 
-    function renderItems(items) {
+    function renderFeed(items) {
       const listEl = document.getElementById('items-list');
       if (!items || items.length === 0) {
         listEl.innerHTML = `
-          <div class="text-center py-16 bg-surface-900 rounded-2xl border border-surface-800 p-6 space-y-2">
-            <div class="text-3xl">✨</div>
-            <h3 class="text-sm font-semibold text-slate-200">Bandeja despejada</h3>
-            <p class="text-xs text-slate-400 max-w-sm mx-auto">No hay contenido en esta categoría. Puedes sincronizar tus suscripciones o agregar nuevos canales.</p>
+          <div class="text-center py-16 bg-app-card rounded-2xl border border-app-border p-6 space-y-2">
+            <div class="text-3xl">🌿</div>
+            <h3 class="text-sm font-semibold text-white">Todo al día</h3>
+            <p class="text-xs text-slate-400 max-w-sm mx-auto">No hay contenido pendiente en esta categoría.</p>
           </div>
         `;
         return;
@@ -284,108 +345,164 @@
 
       listEl.innerHTML = items.map((item, index) => {
         const score = item.relevance_score || 0;
-        let scorePill = '';
-        if (score >= 85) {
-          scorePill = `<span class="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold">🔥 ${score}% Coincidencia</span>`;
-        } else if (score >= 70) {
-          scorePill = `<span class="px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/30 text-[11px] font-semibold">⭐ ${score}% Relevante</span>`;
-        } else {
-          scorePill = `<span class="px-2 py-0.5 rounded-full bg-surface-800 text-slate-400 text-[10px] font-medium">${score}%</span>`;
-        }
-
         const isVideo = item.content_type === 'video';
-        const typeBadge = isVideo ? '🎬 Video' : '📄 Artículo';
         const takeaways = item.key_takeaways ? (typeof item.key_takeaways === 'string' ? JSON.parse(item.key_takeaways) : item.key_takeaways) : [];
-
-        // Thumbnail or visual
-        let mediaCover = '';
-        if (isVideo && item.thumbnail_url) {
-          mediaCover = `
-            <a href="${item.url}" target="_blank" class="block relative group overflow-hidden rounded-xl bg-black aspect-video shrink-0 w-full sm:w-56 mb-3 sm:mb-0">
-              <img src="${item.thumbnail_url}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300 opacity-90 group-hover:opacity-100">
-              <div class="absolute inset-0 bg-black/20 group-hover:bg-transparent transition"></div>
-              <div class="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded text-[10px] font-semibold text-white flex items-center gap-1">
-                ▶ Ver en YouTube
-              </div>
-            </a>
-          `;
+        
+        let matchBadge = `<span class="text-[11px] font-bold text-blue-400 flex items-center gap-1">✦ ${score}% Match</span>`;
+        if (score >= 90) {
+          matchBadge = `<span class="text-[11px] font-bold text-emerald-400 flex items-center gap-1">✦ ${score}% Top Match</span>`;
         }
 
-        return `
-          <article class="bg-surface-900 border border-surface-800 hover:border-surface-700 rounded-2xl p-4 sm:p-5 transition shadow-lg shadow-black/20 space-y-3.5">
-            <!-- Header Meta -->
-            <div class="flex items-center justify-between text-xs">
-              <div class="flex items-center space-x-2">
-                <span class="font-semibold text-slate-300">${item.author}</span>
-                <span class="text-slate-600">•</span>
-                <span class="text-slate-400 text-[11px]">${typeBadge}</span>
-              </div>
-              <div>${scorePill}</div>
-            </div>
+        // Substack / Feedly / YouTube polished layouts
+        if (isVideo) {
+          // YouTube 16:9 Full-Bleed Video Card with Native Style
+          return `
+            <article class="bg-app-card border border-app-border/70 hover:border-app-border rounded-2xl overflow-hidden transition shadow-xl space-y-3 pb-3.5">
+              <!-- Video Cover Thumbnail -->
+              <a href="${item.url}" target="_blank" class="block relative aspect-video bg-neutral-900 group">
+                <img src="${item.thumbnail_url || 'https://i.ytimg.com/vi/' + item.video_id + '/hqdefault.jpg'}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300 opacity-90 group-hover:opacity-100">
+                <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                <div class="absolute bottom-2.5 right-2.5 bg-black/90 px-2 py-0.5 rounded-md text-[11px] font-bold text-white tracking-wide">
+                  ▶ YouTube
+                </div>
+              </a>
 
-            <!-- Content Body (Split layout on desktop) -->
-            <div class="flex flex-col sm:flex-row gap-4 items-start">
-              ${mediaCover}
-              <div class="flex-1 space-y-2 min-w-0">
+              <!-- Content Meta -->
+              <div class="px-4 space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                  <div class="flex items-center space-x-2">
+                    <span class="w-2 h-2 rounded-full bg-red-600"></span>
+                    <span class="font-bold text-white text-xs">${item.author}</span>
+                  </div>
+                  <div>${matchBadge}</div>
+                </div>
+
                 <h2 class="text-base font-bold text-white leading-snug">
-                  <a href="${item.url}" target="_blank" class="hover:text-indigo-400 transition">
+                  <a href="${item.url}" target="_blank" class="hover:text-blue-400 transition">
                     ${item.title}
                   </a>
                 </h2>
 
-                <!-- Curator Hook -->
+                <!-- AI Quick Hook -->
                 ${item.curator_note ? `
-                  <div class="bg-surface-950 border border-surface-800/80 rounded-lg px-3 py-2 text-xs text-indigo-300/90">
-                    💡 <strong class="text-indigo-200">Por qué verlo:</strong> ${item.curator_note}
-                  </div>
+                  <p class="text-xs text-slate-300 leading-relaxed italic">
+                    💡 ${item.curator_note}
+                  </p>
                 ` : ''}
-              </div>
-            </div>
 
-            <!-- AI Summary Drawer (Simple Inline Toggle) -->
-            <div class="bg-surface-950/70 border border-surface-800/60 rounded-xl p-3.5 text-xs space-y-2">
-              <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
-                <div class="font-semibold text-slate-300 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-                  <span>📌</span> Resumen y Puntos Clave (IA)
+                <!-- AI Summary Accordion (YouTube Style: ✦ Summary ▾) -->
+                <div class="bg-black/60 border border-app-border/80 rounded-xl p-3 space-y-2 text-xs">
+                  <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
+                    <div class="font-bold text-slate-200 flex items-center gap-1 text-[11px] tracking-wide">
+                      <span class="text-blue-400">✦</span> Resumen y Puntos Clave
+                    </div>
+                    <button id="toggle-btn-${item.id}" class="text-blue-400 font-semibold text-xs">
+                      Desplegar ▾
+                    </button>
+                  </div>
+
+                  <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-app-border/70 space-y-2 text-slate-300 leading-relaxed">
+                    <p class="whitespace-pre-line text-xs font-normal">${item.summary_tldr || 'Resumen disponible.'}</p>
+                    ${takeaways.length > 0 ? `
+                      <ul class="space-y-1 text-xs text-slate-300 list-disc list-inside pt-1">
+                        ${takeaways.map(t => `<li>${t}</li>`).join('')}
+                      </ul>
+                    ` : ''}
+                  </div>
                 </div>
-                <button id="toggle-btn-${item.id}" class="text-slate-400 hover:text-white text-xs font-medium">
-                  Mostrar ▼
-                </button>
+
+                <!-- Card Bottom Rating & Action Bar -->
+                <div class="flex items-center justify-between pt-2 border-t border-app-border/60 text-xs">
+                  <!-- Fast Reaction / RLHF Buttons -->
+                  <div class="flex items-center space-x-1">
+                    <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-app-subtle text-slate-400 hover:text-red-400 transition text-sm">
+                      ${item.user_rating === 'love' ? '❤️' : '🤍'}
+                    </button>
+                    <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-app-subtle text-slate-400 hover:text-white transition text-sm">
+                      ${item.user_rating === 'dislike' ? '👎' : '🤍'}
+                    </button>
+                    <button onclick="openFeedbackModal(${item.id})" class="px-2 py-1 rounded-lg bg-black hover:bg-app-subtle text-slate-300 text-[11px] font-semibold border border-app-border transition">
+                      💬 Calificar
+                    </button>
+                  </div>
+
+                  <div class="flex items-center space-x-2">
+                    <button onclick="updateItemStatus(${item.id}, '${item.status === 'reading' ? 'inbox' : 'reading'}')" class="p-1.5 rounded-lg hover:bg-app-subtle text-slate-300 text-xs font-medium">
+                      ${item.status === 'reading' ? '🔖 Guardado' : '🔖 Guardar'}
+                    </button>
+                    <button onclick="updateItemStatus(${item.id}, 'archived')" class="p-1.5 rounded-lg hover:bg-app-subtle text-slate-400 hover:text-white text-xs">
+                      ✓ Visto
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          `;
+        } else {
+          // Feedly / Substack Magazine Layout (Split Card)
+          return `
+            <article class="bg-app-card border border-app-border/70 hover:border-app-border rounded-2xl p-4 transition shadow-lg space-y-3">
+              <!-- Top Category Header (Feedly style) -->
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-blue-400 uppercase text-[10px] tracking-wider">${item.author}</span>
+                <div>${matchBadge}</div>
               </div>
 
-              <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-surface-800 space-y-2 text-slate-300 leading-relaxed">
-                <p class="whitespace-pre-line text-xs">${item.summary_tldr || 'Resumen no disponible.'}</p>
-                
-                ${takeaways.length > 0 ? `
-                  <div class="pt-2 border-t border-surface-800/60">
-                    <strong class="text-slate-300 block mb-1 text-[11px] uppercase tracking-wider">Ideas Principales:</strong>
-                    <ul class="space-y-1 list-disc list-inside text-slate-300 text-xs">
+              <!-- Main Content & Title -->
+              <div>
+                <h2 class="text-base font-bold text-white font-serif leading-snug">
+                  <a href="${item.url}" target="_blank" class="hover:text-blue-400 transition">
+                    ${item.title}
+                  </a>
+                </h2>
+                <p class="text-xs text-slate-400 font-sans mt-1.5 line-clamp-2 leading-relaxed">
+                  ${item.summary_tldr || item.raw_content || ''}
+                </p>
+              </div>
+
+              <!-- AI Summary Accordion -->
+              <div class="bg-black/60 border border-app-border/80 rounded-xl p-3 space-y-2 text-xs">
+                <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
+                  <div class="font-bold text-slate-200 flex items-center gap-1 text-[11px]">
+                    <span class="text-blue-400">✦</span> Puntos Clave
+                  </div>
+                  <button id="toggle-btn-${item.id}" class="text-blue-400 font-semibold text-xs">
+                    Desplegar ▾
+                  </button>
+                </div>
+
+                <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-app-border/70 space-y-2 text-slate-300">
+                  ${takeaways.length > 0 ? `
+                    <ul class="space-y-1 text-xs text-slate-300 list-disc list-inside">
                       ${takeaways.map(t => `<li>${t}</li>`).join('')}
                     </ul>
-                  </div>
-                ` : ''}
+                  ` : ''}
+                </div>
               </div>
-            </div>
 
-            <!-- Card Action Footer -->
-            <div class="flex items-center justify-between pt-1 border-t border-surface-800/60 text-xs">
-              <a href="${item.url}" target="_blank" class="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-semibold py-1">
-                Abrir en ${isVideo ? 'YouTube' : 'Web'} ↗
-              </a>
-
-              <div class="flex items-center space-x-1.5">
-                ${item.status !== 'reading' ? `
-                  <button onclick="updateItemStatus(${item.id}, 'reading')" class="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 text-[11px] font-medium transition">
-                    🔖 Guardar
+              <!-- Card Bottom Actions -->
+              <div class="flex items-center justify-between pt-1 border-t border-app-border/60 text-xs">
+                <div class="flex items-center space-x-1">
+                  <button onclick="quickRate(${item.id}, 'love')" class="p-1.5 rounded hover:bg-app-subtle text-slate-400 hover:text-red-400">
+                    ${item.user_rating === 'love' ? '❤️' : '🤍'}
                   </button>
-                ` : ''}
-                <button onclick="updateItemStatus(${item.id}, 'archived')" class="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-400 hover:text-slate-200 text-[11px] font-medium transition">
-                  ✓ Marcar como visto
-                </button>
+                  <button onclick="openFeedbackModal(${item.id})" class="px-2 py-1 rounded bg-black text-slate-300 text-[11px] font-semibold border border-app-border">
+                    💬 Calificar
+                  </button>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                  <a href="${item.url}" target="_blank" class="text-blue-400 hover:text-blue-300 font-semibold">
+                    Leer ↗
+                  </a>
+                  <button onclick="updateItemStatus(${item.id}, 'archived')" class="text-slate-400 hover:text-white">
+                    ✓ Visto
+                  </button>
+                </div>
               </div>
-            </div>
-          </article>
-        `;
+            </article>
+          `;
+        }
       }).join('');
     }
 
@@ -397,7 +514,62 @@
         btn.innerText = 'Ocultar ▲';
       } else {
         content.classList.add('hidden');
-        btn.innerText = 'Mostrar ▼';
+        btn.innerText = 'Desplegar ▾';
+      }
+    }
+
+    async function quickRate(itemId, rating) {
+      try {
+        await fetch(`/api/items/${itemId}/feedback`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ rating })
+        });
+        showToast(rating === 'love' ? '¡Guardado en tus preferencias! (+Relevancia)' : 'Entendido, reduciremos este tipo de contenido');
+        await loadItems();
+        await loadProfile();
+      } catch (err) {
+        showToast('Error al guardar calificación', '⚠️');
+      }
+    }
+
+    function openFeedbackModal(itemId) {
+      const item = cachedItems.find(i => i.id === itemId);
+      if (!item) return;
+      activeFeedbackItemId = itemId;
+      document.getElementById('feedback-item-title').innerText = item.title;
+      selectQuickRating(item.user_rating || 'love');
+      document.getElementById('feedback-comment').value = item.user_feedback_comment || '';
+      openModal('modal-feedback');
+    }
+
+    function selectQuickRating(rating) {
+      selectedRating = rating;
+      ['love', 'like', 'dislike'].forEach(r => {
+        const btn = document.getElementById(`rate-btn-${r}`);
+        if (r === rating) {
+          btn.className = "px-3 py-2 rounded-lg bg-blue-600/30 border border-blue-500 flex flex-col items-center gap-1 transition";
+        } else {
+          btn.className = "px-3 py-2 rounded-lg hover:bg-app-card border border-transparent flex flex-col items-center gap-1 transition opacity-70";
+        }
+      });
+    }
+
+    async function submitItemFeedback() {
+      if (!activeFeedbackItemId) return;
+      const comment = document.getElementById('feedback-comment').value.trim();
+      try {
+        await fetch(`/api/items/${activeFeedbackItemId}/feedback`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ rating: selectedRating, comment })
+        });
+        showToast('IA calibrada con tus comentarios ⭐');
+        closeModal('modal-feedback');
+        await loadItems();
+        await loadProfile();
+      } catch (err) {
+        showToast('Error al procesar feedback', '⚠️');
       }
     }
 
@@ -408,7 +580,7 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ status: newStatus })
         });
-        showToast(newStatus === 'archived' ? 'Marcado como visto' : 'Guardado en tu lista');
+        showToast(newStatus === 'archived' ? 'Marcado como visto' : 'Guardado');
         await loadItems();
       } catch (err) {
         showToast('Error al actualizar', '⚠️');
@@ -417,44 +589,39 @@
 
     async function syncFeeds() {
       const btn = document.getElementById('sync-btn');
-      btn.innerHTML = `<span class="animate-spin text-indigo-400">↻</span> Actualizando...`;
+      btn.innerHTML = `<span class="animate-spin text-blue-400">↻</span>`;
       try {
         const res = await fetch('/api/feeds/sync', { method: 'POST' });
         const data = await res.json();
-        showToast(`Feed actualizado (+${data.new_items || 0} nuevos)`);
+        showToast(`Feed sincronizado (+${data.new_items || 0} nuevos)`);
         await loadItems();
       } catch (err) {
-        showToast('Error al actualizar', '⚠️');
+        showToast('Error en sincronización', '⚠️');
       } finally {
-        btn.innerHTML = `<svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> <span>Actualizar</span>`;
+        btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>`;
       }
     }
 
     async function addSingleFeed() {
-      const url = document.getElementById('add-feed-url').value.trim();
-      const title = document.getElementById('add-feed-title').value.trim();
-      if (!url) {
-        showToast('Ingresa una URL', '⚠️');
-        return;
-      }
+      const url = document.getElementById('feed-url-input').value.trim();
+      if (!url) return;
       try {
         await fetch('/api/feeds', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ url, title, type: url.includes('youtube') ? 'youtube' : 'rss' })
+          body: JSON.stringify({ url })
         });
-        showToast('Canal agregado');
-        document.getElementById('add-feed-url').value = '';
-        document.getElementById('add-feed-title').value = '';
-        closeModal('modal-add-feed');
+        showToast('Canal agregado y procesado');
+        document.getElementById('feed-url-input').value = '';
+        closeModal('modal-add');
         await syncFeeds();
       } catch (err) {
         showToast('Error al agregar canal', '⚠️');
       }
     }
 
-    async function importOpmlText() {
-      const text = document.getElementById('opml-raw').value.trim();
+    async function importOpml() {
+      const text = document.getElementById('opml-input').value.trim();
       if (!text) return;
       try {
         const res = await fetch('/api/feeds/import-opml', {
@@ -463,49 +630,48 @@
           body: JSON.stringify({ opml: text })
         });
         const data = await res.json();
-        showToast(`Importados ${data.imported_count || 0} canales`);
-        document.getElementById('opml-raw').value = '';
-        closeModal('modal-add-feed');
+        showToast(`Importadas ${data.imported_count || 0} suscripciones`);
+        document.getElementById('opml-input').value = '';
+        closeModal('modal-add');
         await syncFeeds();
       } catch (err) {
-        showToast('Error al procesar OPML', '⚠️');
+        showToast('Error al importar OPML', '⚠️');
       }
     }
 
-    async function loadSettings() {
+    async function loadProfile() {
       try {
         const res = await fetch('/api/profile');
         const prof = await res.json();
-        const topics = prof.focus_topics || [];
-        document.getElementById('settings-topics').value = topics.join('\n');
-        document.getElementById('settings-criteria').value = prof.system_prompt_criteria || '';
+        const learned = prof.learned_preferences || {};
         
-        // Update top banner text
-        if (topics.length > 0) {
-          document.getElementById('active-topics-summary').innerText = topics.slice(0, 3).join(', ') + '...';
-        }
+        // Render learned authors
+        const authorsList = document.getElementById('learned-authors-list');
+        const authors = learned.boosted_authors || [];
+        authorsList.innerHTML = authors.map(a => `<span class="px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40">✓ ${a}</span>`).join('') || '<span class="text-slate-500">Aún no has calificado autores.</span>';
+
+        // Render learned tags
+        const tagsList = document.getElementById('learned-tags-list');
+        const tags = Object.keys(learned.boosted_tags || {});
+        tagsList.innerHTML = tags.map(t => `<span class="px-2.5 py-1 rounded-full bg-blue-950 text-blue-300 border border-blue-500/40">★ ${t}</span>`).join('') || '<span class="text-slate-500">Dale ❤️ a los videos que te gusten para entrenar la IA.</span>';
+
+        document.getElementById('edit-focus-topics').value = (prof.focus_topics || []).join('\n');
       } catch (err) {
         console.error(err);
       }
     }
 
-    async function saveSettings() {
-      const rawTopics = document.getElementById('settings-topics').value;
-      const criteria = document.getElementById('settings-criteria').value;
-      const topics = rawTopics.split('\n').map(t => t.trim()).filter(Boolean);
-
+    async function saveTopicsFromModal() {
+      const raw = document.getElementById('edit-focus-topics').value;
+      const topics = raw.split('\n').map(t => t.trim()).filter(Boolean);
       try {
         await fetch('/api/profile', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            focus_topics: topics,
-            system_prompt_criteria: criteria
-          })
+          body: JSON.stringify({ focus_topics: topics })
         });
-        showToast('Temas de interés guardados');
-        closeModal('modal-settings');
-        await loadSettings();
+        showToast('Temas actualizados exitosamente');
+        closeModal('modal-learned');
         await loadItems();
       } catch (err) {
         showToast('Error al guardar', '⚠️');

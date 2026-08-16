@@ -10,9 +10,13 @@ from datetime import datetime
 from app.db import get_db_connection, init_db
 from app.ingestion import (
     register_feed, parse_youtube_feed_xml, 
-    parse_rss_feed_xml, parse_opml, save_items_to_db
+    parse_rss_feed_xml, parse_opml, save_items_to_db,
+    resolve_feed_url
 )
-from app.ai_engine import process_item_ai, process_all_pending_items, get_user_profile
+from app.ai_engine import (
+    process_item_ai, process_all_pending_items, 
+    get_user_profile, record_feedback
+)
 
 PORT = int(os.environ.get("PORT", 8080))
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
@@ -58,7 +62,6 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
             conn = get_db_connection()
             cursor = conn.cursor()
             
-            # Counts
             cursor.execute("SELECT status, COUNT(*) as cnt FROM items GROUP BY status")
             counts_rows = cursor.fetchall()
             counts = {r["status"]: r["cnt"] for r in counts_rows}
@@ -66,7 +69,8 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
             sql = "SELECT * FROM items WHERE 1=1"
             
             if tab == "curated":
-                sql += " AND status != 'archived' ORDER BY relevance_score DESC, published_at DESC LIMIT 50"
+                # Prioritize high scores and favorites/loves
+                sql += " AND status != 'archived' ORDER BY (CASE WHEN user_rating = 'love' THEN 100 ELSE relevance_score END) DESC, published_at DESC LIMIT 50"
             elif tab == "inbox":
                 sql += " AND status = 'inbox' ORDER BY published_at DESC LIMIT 50"
             elif tab == "reading":
@@ -125,6 +129,16 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             body = {}
 
+        # API: /api/items/<id>/feedback (Adaptive Preference Learning)
+        match_feedback = re.match(r"^/api/items/(\d+)/feedback$", path)
+        if match_feedback:
+            item_id = int(match_feedback.group(1))
+            rating = body.get("rating", "like")
+            comment = body.get("comment", "")
+            record_feedback(item_id, rating, comment)
+            self.send_json_response({"status": "success", "item_id": item_id, "rating": rating})
+            return
+
         # API: /api/items/<id>/status
         match_status = re.match(r"^/api/items/(\d+)/status$", path)
         if match_status:
@@ -140,26 +154,33 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
 
         # API: /api/feeds
         if path == "/api/feeds":
-            title = body.get("title", "")
             raw_url = body.get("url", "")
-            feed_type = body.get("type", "youtube")
+            title = body.get("title", "")
             
-            feed_url = raw_url
-            if feed_type == "youtube" and not raw_url.endswith(".xml"):
-                if "channel/" in raw_url:
-                    ch_id = raw_url.split("channel/")[1].split("/")[0].split("?")[0]
-                    feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={ch_id}"
-                elif "@" in raw_url:
-                    # In real usage, YouTube feed for @handle can be resolved or provided
-                    feed_url = raw_url
+            resolved_feed_url, detected_type, suggested_title = resolve_feed_url(raw_url)
+            final_title = title or suggested_title or raw_url
             
             feed_id = register_feed(
-                title=title or raw_url,
-                feed_url=feed_url,
-                feed_type=feed_type,
+                title=final_title,
+                feed_url=resolved_feed_url,
+                feed_type=detected_type,
                 category="General",
                 site_url=raw_url
             )
+            
+            try:
+                req = urllib.request.Request(resolved_feed_url, headers={'User-Agent': 'Mozilla/5.0 FocusFeed/1.0'})
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    xml_content = resp.read().decode('utf-8', errors='ignore')
+                    if detected_type == "youtube":
+                        parsed_items = parse_youtube_feed_xml(xml_content, feed_id)
+                    else:
+                        parsed_items = parse_rss_feed_xml(xml_content, feed_id)
+                    save_items_to_db(parsed_items)
+                    process_all_pending_items(limit=15)
+            except Exception:
+                pass
+                
             self.send_json_response({"status": "success", "feed_id": feed_id})
             return
 
@@ -215,12 +236,10 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
             cursor.execute("""
             UPDATE user_profile SET
                 focus_topics = ?,
-                system_prompt_criteria = ?,
                 updated_at = ?
             WHERE id = 1
             """, (
                 topics_json,
-                body.get("system_prompt_criteria", ""),
                 datetime.utcnow().isoformat()
             ))
             conn.commit()
@@ -231,32 +250,10 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(404)
         self.end_headers()
 
-    def do_DELETE(self):
-        parsed_url = urllib.parse.urlparse(self.path)
-        path = parsed_url.path
-        
-        match_feed = re.match(r"^/api/feeds/(\d+)$", path)
-        if match_feed:
-            feed_id = int(match_feed.group(1))
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM items WHERE feed_id = ?", (feed_id,))
-            cursor.execute("DELETE FROM feeds WHERE id = ?", (feed_id,))
-            conn.commit()
-            conn.close()
-            self.send_json_response({"status": "success", "deleted_feed_id": feed_id})
-            return
-            
-        self.send_response(404)
-        self.end_headers()
-
     def seed_sample_dataset(self):
-        """
-        Seeds high-signal realistic feeds and enriched items aligned with user focus.
-        """
         f1 = register_feed("Andrej Karpathy", "https://www.youtube.com/feeds/videos.xml?channel_id=UCXUPKJOtpqmgUOxw8p9n6Tw", "youtube", "IA & Agentes")
         f2 = register_feed("Tiago Forte", "https://www.youtube.com/feeds/videos.xml?channel_id=UCBw92y4tWvjB0U_N9l3l7-w", "youtube", "PKM & Obsidian")
-        f3 = register_feed("MIT Technology Review", "https://www.technologyreview.com/feed/", "rss", "Educación")
+        f3 = register_feed("New York Journal of Philosophy", "https://journalofphilosophy.substack.com/feed", "substack", "Filosofía")
         f4 = register_feed("StudioBinder", "https://www.youtube.com/feeds/videos.xml?channel_id=UCQ4v9aB3X59bF3Jb7M6T-aA", "youtube", "Cine")
 
         sample_items = [
@@ -279,8 +276,31 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                     "Ventanas de contexto grandes complementan pero no sustituyen el retrieval jerárquico.",
                     "La modularidad en herramientas y esquemas de validación previa previene errores de ejecución."
                 ], ensure_ascii=False),
-                "curator_note": "Alineación directa con investigación de sistemas agénticos y automatización.",
-                "topic_tags": json.dumps(["Sistemas-Agénticos", "IA-Aplicada"], ensure_ascii=False),
+                "curator_note": "Alineación directa con tu investigación de sistemas agénticos y automatización.",
+                "topic_tags": json.dumps(["IA & Agentes", "Modelos"], ensure_ascii=False),
+                "ai_processed": 1,
+                "status": "inbox"
+            },
+            {
+                "feed_id": f3,
+                "guid": "sub:sample_examined_life",
+                "title": "The Examined Life in the Age of Optimisation",
+                "url": "https://journalofphilosophy.substack.com",
+                "author": "New York Journal of Philosophy",
+                "published_at": "2026-08-14T12:00:00Z",
+                "content_type": "article",
+                "video_id": None,
+                "thumbnail_url": "",
+                "raw_content": "An insightful exploration of how hyper-optimization frameworks impact contemporary philosophical inquiry and self-reflection.",
+                "transcript": "An insightful exploration of how hyper-optimization frameworks impact contemporary philosophical inquiry and self-reflection in digital environments.",
+                "relevance_score": 93,
+                "summary_tldr": "Un ensayo filosófico contemporáneo que examina la tensión entre los sistemas de hiper-optimización personal y la deliberación reflexiva socrática.\n\nEl autor plantea cómo recuperar espacios de contemplación profunda frente a la sobre-cuantificación de las rutinas diarias.",
+                "key_takeaways": json.dumps([
+                    "La optimización técnica sin propósito existencial genera fatiga cognitiva.",
+                    "Hacia una filosofía práctica que integre tecnología con deliberación reflexiva."
+                ], ensure_ascii=False),
+                "curator_note": "Excelente profundidad conceptual afín a tus lecturas filosóficas.",
+                "topic_tags": json.dumps(["Filosofía", "Reflexión"], ensure_ascii=False),
                 "ai_processed": 1,
                 "status": "inbox"
             },
@@ -303,30 +323,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                     "Priorizar enlaces bidireccionales basados en problemas o proyectos concretos."
                 ], ensure_ascii=False),
                 "curator_note": "Relevante para tu gestión del conocimiento personal (PKM).",
-                "topic_tags": json.dumps(["PKM", "Zettelkasten"], ensure_ascii=False),
-                "ai_processed": 1,
-                "status": "inbox"
-            },
-            {
-                "feed_id": f3,
-                "guid": "rss:sample_mit_education",
-                "title": "Modelos Educativos Asíncronos y Micro-Credenciales Apilables para 2030",
-                "url": "https://www.technologyreview.com",
-                "author": "MIT Technology Review",
-                "published_at": "2026-08-12T10:00:00Z",
-                "content_type": "article",
-                "video_id": None,
-                "thumbnail_url": "",
-                "raw_content": "Higher education institutions are pivoting toward modular, stackable competency frameworks integrated with continuous AI coaching.",
-                "transcript": "Higher education institutions are accelerating the transformation of traditional degrees into modular, stackable micro-credentials.",
-                "relevance_score": 91,
-                "summary_tldr": "Reporte estratégico sobre la reconfiguración de la educación superior hacia trayectorias modulares y credenciales apilables.\n\nSe analiza la integración de acompañamiento vocacional adaptativo para elevar la retención y pertinencia formativa.",
-                "key_takeaways": json.dumps([
-                    "Desarticulación de planes rígidos en módulos independientes con valor curricular propio.",
-                    "Evaluación por competencias prácticas asistida por analítica de datos."
-                ], ensure_ascii=False),
-                "curator_note": "Alineación directa con planeación institucional y modelos educativos innovadores.",
-                "topic_tags": json.dumps(["Estrategia-Educativa", "Transformación"], ensure_ascii=False),
+                "topic_tags": json.dumps(["PKM & Notas", "Obsidian"], ensure_ascii=False),
                 "ai_processed": 1,
                 "status": "inbox"
             },
@@ -342,14 +339,14 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 "thumbnail_url": "https://i.ytimg.com/vi/s9f9K_O1b7c/hqdefault.jpg",
                 "raw_content": "Visual essay exploring how changing aspect ratios and large format film create spatial immersion in modern cinema.",
                 "transcript": "Aspect ratios in modern cinema are not merely technical choices; they dictate the psychological relationship between the spectator and the physical landscape.",
-                "relevance_score": 86,
+                "relevance_score": 88,
                 "summary_tldr": "Ensayo visual sobre el impacto del aspect ratio vertical 1.43:1 en directores como Christopher Nolan y Yorgos Lanthimos, y cómo la arquitectura visual genera tensión escénica.",
                 "key_takeaways": json.dumps([
                     "El formato 1.43:1 aprovecha la verticalidad para intensificar la relación del personaje con el entorno.",
                     "Uso del espacio negativo para generar tensión dramática."
                 ], ensure_ascii=False),
                 "curator_note": "Afinidad con tus temas de cine de autor y narrativa visual.",
-                "topic_tags": json.dumps(["Cine-Narrativa", "Aspect-Ratio"], ensure_ascii=False),
+                "topic_tags": json.dumps(["Cine & Narrativa", "Aspect-Ratio"], ensure_ascii=False),
                 "ai_processed": 1,
                 "status": "inbox"
             }

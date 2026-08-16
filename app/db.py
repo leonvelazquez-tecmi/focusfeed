@@ -3,7 +3,6 @@ import json
 import os
 from datetime import datetime
 
-# Default DB Path to /tmp/ for full POSIX lock compatibility in sandbox environments
 DB_PATH = os.environ.get("FEED_DB_PATH", "/tmp/feed_curator.db")
 
 def get_db_connection():
@@ -42,78 +41,89 @@ def init_db():
         url TEXT NOT NULL,
         author TEXT,
         published_at TEXT,
-        content_type TEXT NOT NULL, -- 'video', 'article', 'audio'
+        content_type TEXT NOT NULL,
         video_id TEXT,
         thumbnail_url TEXT,
         duration_seconds INTEGER DEFAULT 0,
         raw_content TEXT,
         transcript TEXT,
         
-        -- AI Enrichment fields
-        relevance_score INTEGER DEFAULT 0, -- 0 to 100
+        relevance_score INTEGER DEFAULT 0,
         summary_tldr TEXT,
-        key_takeaways TEXT, -- JSON array
+        key_takeaways TEXT,
         curator_note TEXT,
-        topic_tags TEXT, -- JSON array
-        ai_processed INTEGER DEFAULT 0, -- 0=pending, 1=processed, 2=failed
+        topic_tags TEXT,
+        ai_processed INTEGER DEFAULT 0,
         ai_processed_at TEXT,
         
-        -- User State
-        status TEXT DEFAULT 'inbox', -- 'inbox', 'reading', 'archived', 'favorite'
-        obsidian_exported INTEGER DEFAULT 0,
-        user_notes TEXT,
+        status TEXT DEFAULT 'inbox',
+        user_rating TEXT DEFAULT 'none',
+        user_feedback_comment TEXT,
+        feedback_at TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(feed_id) REFERENCES feeds(id) ON DELETE CASCADE
     );
     """)
 
-    # 3. User Focus Profile / Settings table
+    # Auto-migrate columns if table already existed with older schema
+    try:
+        cursor.execute("ALTER TABLE items ADD COLUMN user_rating TEXT DEFAULT 'none'")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE items ADD COLUMN user_feedback_comment TEXT")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE items ADD COLUMN feedback_at TEXT")
+    except Exception:
+        pass
+
+    # 3. User Profile table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS user_profile (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_name TEXT DEFAULT 'Usuario',
-        obsidian_vault_name TEXT DEFAULT 'ObsidianVault',
-        obsidian_folder TEXT DEFAULT 'CuratedFeed',
-        focus_topics TEXT, -- JSON array of topics
+        user_name TEXT DEFAULT 'León Velázquez',
+        focus_topics TEXT,
         system_prompt_criteria TEXT,
+        learned_preferences TEXT,
         min_relevance_threshold INTEGER DEFAULT 60,
-        auto_summarize INTEGER DEFAULT 1,
         api_key_gemini TEXT,
         api_key_openai TEXT,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     """)
 
-    # Populate default profile if empty
+    try:
+        cursor.execute("ALTER TABLE user_profile ADD COLUMN learned_preferences TEXT")
+    except Exception:
+        pass
+
     cursor.execute("SELECT COUNT(*) as count FROM user_profile")
     if cursor.fetchone()["count"] == 0:
         default_topics = json.dumps([
             "Inteligencia Artificial Aplicada y Sistemas Agénticos",
             "Gestión del Conocimiento Personal (PKM, Obsidian, Zettelkasten)",
-            "Transformación Institucional y Estrategia Educativa",
-            "Modelos Educativos Innovadores (MAPS, FIT, Credenciales Apilables)",
-            "Cine de autor, narrativa visual y crítica cinematográfica",
-            "Música contemporánea, vinilos y análisis cultural",
-            "Enología, gastronomía y tecnología para el hogar"
+            "Transformación Institucional y Modelos Educativos (MAPS, FIT)",
+            "Cine de autor, narrativa visual y formato gran escala",
+            "Música contemporánea, post-punk, vinilos y análisis cultural",
+            "Enología y exploración gastronómica"
         ], ensure_ascii=False)
         
         default_prompt = (
-            "Evalúa el contenido considerando su profundidad conceptual, rigor metodológico y aplicabilidad práctica. "
-            "Prioriza análisis de fondo, casos de estudio y avances tecnológicos sobre noticias superficiales o clickbait."
+            "Prioriza profundidad conceptual, rigor analítico y valor duradero. "
+            "Descarta clickbait, noticias de corta duración y tutoriales superficiales."
         )
 
         cursor.execute("""
         INSERT INTO user_profile (
-            user_name, obsidian_vault_name, obsidian_folder, 
-            focus_topics, system_prompt_criteria, min_relevance_threshold
-        ) VALUES (?, ?, ?, ?, ?, ?)
+            user_name, focus_topics, system_prompt_criteria, learned_preferences
+        ) VALUES (?, ?, ?, ?)
         """, (
             "León Velázquez",
-            "ObsidianVault",
-            "Lecturas_y_Videos/Curados",
             default_topics,
             default_prompt,
-            65
+            json.dumps({"boosted_authors": [], "boosted_tags": {}, "penalized_tags": {}}, ensure_ascii=False)
         ))
 
     conn.commit()
@@ -121,4 +131,4 @@ def init_db():
 
 if __name__ == "__main__":
     init_db()
-    print("Database initialized successfully at:", DB_PATH)
+    print("Database initialized & migrated.")
