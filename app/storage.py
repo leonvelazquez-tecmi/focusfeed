@@ -107,9 +107,12 @@ def fetch_feeds():
         return feeds
 
 def batch_create_feeds(feeds_list: list):
+    """Crea o actualiza feeds. Retorna la lista de registros creados/actualizados
+    (con su id real), NUNCA un conteo, porque el id real se necesita para
+    enlazar los items via feed_id. Lanza RuntimeError si Supabase rechaza el insert."""
     if not feeds_list:
-        return 0
-        
+        return []
+
     if is_supabase():
         clean_batch = []
         for f in feeds_list:
@@ -122,22 +125,23 @@ def batch_create_feeds(feeds_list: list):
                 "custom_category": f.get("custom_category", "General"),
                 "is_active": True
             })
-        
+
         # Try batch upsert
         res = supabase_request("feeds?on_conflict=feed_url", method="POST", data=clean_batch, headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
         if isinstance(res, list):
-            return len(res)
-            
+            return res
+
         # If batch on_conflict fails, try standard batch insert
         res_standard = supabase_request("feeds", method="POST", data=clean_batch)
         if isinstance(res_standard, list):
-            return len(res_standard)
-            
-        return len(clean_batch)
+            return res_standard
+
+        err_msg = res.get("message") if isinstance(res, dict) else str(res)
+        raise RuntimeError(f"Supabase rechazó la creación de feeds: {err_msg}")
     else:
         conn = get_db_connection()
         cursor = conn.cursor()
-        inserted = 0
+        created = []
         for f in feeds_list:
             try:
                 cursor.execute("""
@@ -145,21 +149,26 @@ def batch_create_feeds(feeds_list: list):
                 VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(feed_url) DO UPDATE SET title=excluded.title, custom_category=excluded.custom_category
                 """, (f["title"], f["feed_url"], f.get("site_url", ""), f.get("feed_type", "rss"), f.get("channel_id"), f.get("custom_category", "General")))
-                inserted += 1
-            except Exception:
+                row = cursor.execute("SELECT id FROM feeds WHERE feed_url = ?", (f["feed_url"],)).fetchone()
+                created.append({"id": row["id"], "feed_url": f["feed_url"]})
+            except Exception as e:
+                print(f"Error creando feed local '{f.get('title')}': {e}")
                 continue
         conn.commit()
         conn.close()
-        return inserted
+        return created
 
 def create_or_update_feed(title: str, feed_url: str, feed_type: str = "youtube", category: str = "General", site_url: str = ""):
-    return batch_create_feeds([{
+    created = batch_create_feeds([{
         "title": title,
         "feed_url": feed_url,
         "feed_type": feed_type,
         "custom_category": category,
         "site_url": site_url
     }])
+    if not created:
+        raise RuntimeError(f"No se pudo crear/actualizar el feed: {feed_url}")
+    return created[0]["id"]
 
 def remove_feed(feed_id: int):
     if is_supabase():
@@ -227,6 +236,7 @@ def batch_save_items(items: list):
         clean_batch = []
         for item in items:
             clean_batch.append({
+                "feed_id": item.get("feed_id"),
                 "guid": item["guid"],
                 "title": item["title"],
                 "url": item["url"],
@@ -244,11 +254,13 @@ def batch_save_items(items: list):
                 "topic_tags": item.get("topic_tags", "[]"),
                 "status": "inbox"
             })
-        
+
         res = supabase_request("items?on_conflict=guid", method="POST", data=clean_batch, headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
         if isinstance(res, list):
             return len(res)
-        return len(clean_batch)
+
+        err_msg = res.get("message") if isinstance(res, dict) else str(res)
+        raise RuntimeError(f"Supabase rechazó la inserción de items: {err_msg}")
     else:
         from app.ingestion import save_items_to_db
         return save_items_to_db(items)

@@ -810,7 +810,8 @@
         });
         const data = await res.json();
         if (data.status === 'success') {
-          showToast(`¡${data.imported_count} canales guardados en Supabase!`, '✓');
+          const failMsg = data.failed_count ? ` (${data.failed_count} fallaron)` : '';
+          showToast(`¡${data.imported_count} canales guardados en Supabase!${failMsg}`, '✓');
           document.getElementById('opml-input').value = '';
           closeModal('modal-add');
           await loadFeeds();

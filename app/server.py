@@ -59,11 +59,12 @@ def fetch_feed_and_parse(feed_dict: dict, profile: dict) -> list:
                 itm["key_takeaways"] = json.dumps(analysis["key_takeaways"], ensure_ascii=False)
                 itm["curator_note"] = analysis["curator_note"]
                 itm["topic_tags"] = json.dumps(analysis["topic_tags"], ensure_ascii=False)
-            except Exception:
+            except Exception as e:
                 itm["relevance_score"] = 75
-    except Exception:
-        pass
-        
+                print(f"AI enrichment falló para '{itm.get('title')}': {e}")
+    except Exception as e:
+        print(f"Error obteniendo/parseando feed {feed_url}: {e}")
+
     return parsed_items
 
 class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
@@ -252,9 +253,10 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                             items = fut.result()
                             if items:
                                 all_new_items.extend(items)
-                        except Exception:
+                        except Exception as e:
+                            print(f"Sync de feed falló: {e}")
                             continue
-                            
+
                 inserted_count = batch_save_items(all_new_items) if all_new_items else 0
                 
                 self.send_json_response({
@@ -277,24 +279,29 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 return
             try:
                 feeds = parse_opml(opml_text)
-                
-                # Register all feeds
+
+                # Register all feeds. Un feed que falla no debe tumbar los demás.
                 registered_feeds = []
+                failed_feeds = []
                 for f in feeds:
-                    fid = create_or_update_feed(
-                        title=f["title"],
-                        feed_url=f["feed_url"],
-                        feed_type=f["feed_type"],
-                        category=f["custom_category"],
-                        site_url=f["site_url"]
-                    )
-                    registered_feeds.append({
-                        "id": fid,
-                        "title": f["title"],
-                        "feed_url": f["feed_url"],
-                        "feed_type": f["feed_type"]
-                    })
-                    
+                    try:
+                        fid = create_or_update_feed(
+                            title=f["title"],
+                            feed_url=f["feed_url"],
+                            feed_type=f["feed_type"],
+                            category=f["custom_category"],
+                            site_url=f["site_url"]
+                        )
+                        registered_feeds.append({
+                            "id": fid,
+                            "title": f["title"],
+                            "feed_url": f["feed_url"],
+                            "feed_type": f["feed_type"]
+                        })
+                    except Exception as e:
+                        failed_feeds.append({"title": f.get("title"), "error": str(e)})
+                        print(f"OPML import: fallo al registrar '{f.get('title')}' ({f.get('feed_url')}): {e}")
+
                 # Immediately fetch first 15 feeds in parallel
                 profile = fetch_profile()
                 initial_items = []
@@ -305,16 +312,25 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                             res_items = fut.result()
                             if res_items:
                                 initial_items.extend(res_items)
-                        except Exception:
+                        except Exception as e:
+                            print(f"OPML import: fallo al descargar items de un feed: {e}")
                             continue
-                            
+
+                items_saved = 0
                 if initial_items:
-                    batch_save_items(initial_items)
-                    
+                    try:
+                        items_saved = batch_save_items(initial_items)
+                    except Exception as e:
+                        print(f"OPML import: fallo al guardar items iniciales: {e}")
+                        failed_feeds.append({"title": "(guardado de items)", "error": str(e)})
+
                 self.send_json_response({
-                    "status": "success", 
-                    "imported_count": len(feeds),
-                    "initial_items_loaded": len(initial_items)
+                    "status": "success" if registered_feeds else "error",
+                    "imported_count": len(registered_feeds),
+                    "failed_count": len(failed_feeds),
+                    "failed_feeds": failed_feeds[:10],
+                    "initial_items_loaded": items_saved,
+                    "message": (failed_feeds[0]["error"] if (not registered_feeds and failed_feeds) else None)
                 })
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
