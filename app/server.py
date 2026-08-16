@@ -5,6 +5,7 @@ import urllib.parse
 import urllib.request
 import os
 import re
+import concurrent.futures
 from datetime import datetime
 
 from app.db import init_db, is_supabase
@@ -16,7 +17,7 @@ from app.storage import (
 )
 from app.ingestion import (
     parse_youtube_feed_xml, parse_rss_feed_xml, 
-    parse_opml, resolve_feed_url
+    parse_opml, resolve_feed_url, HEADERS
 )
 from app.ai_engine import (
     process_item_ai, process_all_pending_items, 
@@ -27,6 +28,46 @@ PORT = int(os.environ.get("PORT", 8080))
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 socketserver.TCPServer.allow_reuse_address = True
+
+def fetch_feed_and_parse(feed_dict: dict, profile: dict) -> list:
+    """
+    Fetches an individual RSS/YouTube feed with browser headers and pre-enriches items.
+    """
+    feed_url = feed_dict.get("feed_url")
+    feed_type = feed_dict.get("feed_type", "rss")
+    feed_id = feed_dict.get("id", 1)
+    
+    parsed_items = []
+    try:
+        req = urllib.request.Request(feed_url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=3.5) as resp:
+            xml_content = resp.read().decode('utf-8', errors='ignore')
+            if feed_type == "youtube":
+                parsed_items = parse_youtube_feed_xml(xml_content, feed_id)
+            else:
+                parsed_items = parse_rss_feed_xml(xml_content, feed_id)
+                
+        # Pre-enrich top 3 items per feed with AI score and summary
+        for itm in parsed_items[:3]:
+            try:
+                analysis = analyze_with_llm(
+                    title=itm["title"],
+                    author=itm["author"],
+                    content_type=itm["content_type"],
+                    content_text=itm["raw_content"],
+                    profile=profile
+                )
+                itm["relevance_score"] = analysis["relevance_score"]
+                itm["summary_tldr"] = analysis["summary_tldr"]
+                itm["key_takeaways"] = json.dumps(analysis["key_takeaways"], ensure_ascii=False)
+                itm["curator_note"] = analysis["curator_note"]
+                itm["topic_tags"] = json.dumps(analysis["topic_tags"], ensure_ascii=False)
+            except Exception:
+                itm["relevance_score"] = 75
+    except Exception:
+        pass
+        
+    return parsed_items
 
 class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
     def send_json_response(self, data, status=200):
@@ -67,7 +108,6 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(f.read())
             return
 
-        # Diagnostics & Status
         elif path == "/api/status":
             self.send_json_response({
                 "status": "online",
@@ -77,7 +117,6 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
-        # API: /api/items
         elif path == "/api/items":
             tab = query.get("tab", ["curated"])[0]
             type_filter = query.get("type", ["all"])[0]
@@ -88,7 +127,6 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response({"items": [], "counts": {}, "error": str(e)}, 200)
             return
 
-        # API: /api/feeds
         elif path == "/api/feeds":
             try:
                 feeds = fetch_feeds()
@@ -97,7 +135,6 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response([], 200)
             return
 
-        # API: /api/profile
         elif path == "/api/profile":
             try:
                 profile = fetch_profile()
@@ -121,7 +158,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             body = {}
 
-        # API: /api/items/<id>/feedback
+        # Feedback
         match_feedback = re.match(r"^/api/items/(\d+)/feedback$", path)
         if match_feedback:
             item_id = int(match_feedback.group(1))
@@ -134,7 +171,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return
 
-        # API: /api/items/<id>/status
+        # Status
         match_status = re.match(r"^/api/items/(\d+)/status$", path)
         if match_status:
             item_id = int(match_status.group(1))
@@ -146,11 +183,10 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return
 
-        # API: /api/feeds
+        # Add Feed
         if path == "/api/feeds":
             raw_url = body.get("url", "").strip()
             title = body.get("title", "").strip()
-            
             if not raw_url:
                 self.send_json_response({"status": "error", "message": "URL requerida"}, 400)
                 return
@@ -167,95 +203,52 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                     site_url=raw_url
                 )
                 
-                # Fetch items immediately
-                parsed_items = []
-                try:
-                    req = urllib.request.Request(resolved_feed_url, headers={'User-Agent': 'Mozilla/5.0 FocusFeed/1.0'})
-                    with urllib.request.urlopen(req, timeout=5) as resp:
-                        xml_content = resp.read().decode('utf-8', errors='ignore')
-                        if detected_type == "youtube":
-                            parsed_items = parse_youtube_feed_xml(xml_content, feed_id)
-                        else:
-                            parsed_items = parse_rss_feed_xml(xml_content, feed_id)
-                            
-                        # Enrich items with AI score before saving
-                        profile = fetch_profile()
-                        for itm in parsed_items[:6]:
-                            analysis = analyze_with_llm(
-                                title=itm["title"],
-                                author=itm["author"],
-                                content_type=itm["content_type"],
-                                content_text=itm["raw_content"],
-                                profile=profile
-                            )
-                            itm["relevance_score"] = analysis["relevance_score"]
-                            itm["summary_tldr"] = analysis["summary_tldr"]
-                            itm["key_takeaways"] = json.dumps(analysis["key_takeaways"], ensure_ascii=False)
-                            itm["curator_note"] = analysis["curator_note"]
-                            itm["topic_tags"] = json.dumps(analysis["topic_tags"], ensure_ascii=False)
-                            
-                        batch_save_items(parsed_items)
-                except Exception:
-                    pass
+                # Fetch items
+                profile = fetch_profile()
+                items = fetch_feed_and_parse({"feed_url": resolved_feed_url, "feed_type": detected_type, "id": feed_id}, profile)
+                if items:
+                    batch_save_items(items)
                     
-                self.send_json_response({"status": "success", "feed_id": feed_id, "new_items": len(parsed_items)})
+                self.send_json_response({"status": "success", "feed_id": feed_id, "new_items": len(items)})
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return
 
-        # API: /api/feeds/sync
+        # Sync Feeds in Parallel
         if path == "/api/feeds/sync":
             try:
                 feeds = fetch_feeds()
-                
-                # If no feeds yet, seed defaults so user sees immediate results
                 if not feeds:
                     ensure_seed_if_empty()
                     feeds = fetch_feeds()
                     
-                new_items_count = 0
                 profile = fetch_profile()
+                all_new_items = []
                 
-                # Sync up to 6 feeds per request to stay safely within Vercel's 10s timeout
-                for f in feeds[:6]:
-                    try:
-                        req = urllib.request.Request(f["feed_url"], headers={'User-Agent': 'Mozilla/5.0 FocusFeed/1.0'})
-                        with urllib.request.urlopen(req, timeout=4) as resp:
-                            xml_content = resp.read().decode('utf-8', errors='ignore')
-                            if f.get("feed_type") == "youtube":
-                                parsed_items = parse_youtube_feed_xml(xml_content, f["id"])
-                            else:
-                                parsed_items = parse_rss_feed_xml(xml_content, f["id"])
-                                
-                            # Pre-enrich top 3 items of each feed
-                            for itm in parsed_items[:3]:
-                                analysis = analyze_with_llm(
-                                    title=itm["title"],
-                                    author=itm["author"],
-                                    content_type=itm["content_type"],
-                                    content_text=itm["raw_content"],
-                                    profile=profile
-                                )
-                                itm["relevance_score"] = analysis["relevance_score"]
-                                itm["summary_tldr"] = analysis["summary_tldr"]
-                                itm["key_takeaways"] = json.dumps(analysis["key_takeaways"], ensure_ascii=False)
-                                itm["curator_note"] = analysis["curator_note"]
-                                itm["topic_tags"] = json.dumps(analysis["topic_tags"], ensure_ascii=False)
-
-                            new_items_count += batch_save_items(parsed_items)
-                    except Exception:
-                        continue
-                        
+                # Fetch up to 12 feeds in parallel with ThreadPoolExecutor
+                with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+                    futures = [executor.submit(fetch_feed_and_parse, f, profile) for f in feeds[:12]]
+                    for fut in concurrent.futures.as_completed(futures, timeout=7):
+                        try:
+                            items = fut.result()
+                            if items:
+                                all_new_items.extend(items)
+                        except Exception:
+                            continue
+                            
+                inserted_count = batch_save_items(all_new_items)
+                
                 self.send_json_response({
                     "status": "success", 
-                    "new_items": new_items_count,
+                    "new_items": len(all_new_items),
+                    "inserted_count": inserted_count,
                     "is_supabase": is_supabase()
                 })
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return
 
-        # API: /api/feeds/import-opml
+        # Import OPML
         if path == "/api/feeds/import-opml":
             opml_text = body.get("opml", "")
             if not opml_text:
@@ -263,20 +256,50 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 return
             try:
                 feeds = parse_opml(opml_text)
+                
+                # Register feeds
+                registered_feeds = []
                 for f in feeds:
-                    create_or_update_feed(
+                    fid = create_or_update_feed(
                         title=f["title"],
                         feed_url=f["feed_url"],
                         feed_type=f["feed_type"],
                         category=f["custom_category"],
                         site_url=f["site_url"]
                     )
-                self.send_json_response({"status": "success", "imported_count": len(feeds)})
+                    registered_feeds.append({
+                        "id": fid,
+                        "title": f["title"],
+                        "feed_url": f["feed_url"],
+                        "feed_type": f["feed_type"]
+                    })
+                    
+                # Fetch initial batch of feeds in parallel
+                profile = fetch_profile()
+                all_imported_items = []
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                    futures = [executor.submit(fetch_feed_and_parse, f, profile) for f in registered_feeds[:10]]
+                    for fut in concurrent.futures.as_completed(futures, timeout=7):
+                        try:
+                            res_items = fut.result()
+                            if res_items:
+                                all_imported_items.extend(res_items)
+                        except Exception:
+                            continue
+                            
+                if all_imported_items:
+                    batch_save_items(all_imported_items)
+                    
+                self.send_json_response({
+                    "status": "success", 
+                    "imported_count": len(feeds),
+                    "initial_items_loaded": len(all_imported_items)
+                })
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return
 
-        # API: /api/profile
+        # Profile
         if path == "/api/profile":
             topics = body.get("focus_topics", [])
             criteria = body.get("system_prompt_criteria", "")

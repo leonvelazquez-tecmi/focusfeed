@@ -4,7 +4,7 @@ import re
 import json
 from datetime import datetime
 from app.db import get_db_connection
-from app.extractors import clean_html_article, fetch_youtube_transcript_or_fallback
+from app.extractors import clean_html_article
 
 NAMESPACES = {
     'atom': 'http://www.w3.org/2005/Atom',
@@ -14,16 +14,16 @@ NAMESPACES = {
     'dc': 'http://purl.org/dc/elements/1.1/'
 }
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+}
+
 def resolve_feed_url(raw_url: str) -> tuple[str, str, str]:
-    """
-    Takes any user URL (YouTube @handle, channel URL, Substack, blog)
-    and resolves it to a valid RSS feed URL, feed type, and suggested title.
-    """
     raw_url = raw_url.strip()
     feed_type = "rss"
     suggested_title = ""
 
-    # YouTube URL
     if "youtube.com" in raw_url or "youtu.be" in raw_url:
         feed_type = "youtube"
         if "feeds/videos.xml" in raw_url:
@@ -33,31 +33,25 @@ def resolve_feed_url(raw_url: str) -> tuple[str, str, str]:
             ch_id = raw_url.split("channel/")[1].split("/")[0].split("?")[0]
             return f"https://www.youtube.com/feeds/videos.xml?channel_id={ch_id}", feed_type, suggested_title
             
-        # Try fetching channel page to extract channelId
         try:
-            req = urllib.request.Request(raw_url, headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'})
-            with urllib.request.urlopen(req, timeout=6) as resp:
+            req = urllib.request.Request(raw_url, headers=HEADERS)
+            with urllib.request.urlopen(req, timeout=5) as resp:
                 html = resp.read().decode('utf-8', errors='ignore')
-                # Check for channel_id in RSS link tag
                 rss_match = re.search(r'href="(https://www\.youtube\.com/feeds/videos\.xml\?channel_id=[a-zA-Z0-9_-]+)"', html)
                 if rss_match:
                     return rss_match.group(1), feed_type, suggested_title
-                    
-                # Check for "channelId":"UC..."
                 cid_match = re.search(r'"channelId":"([a-zA-Z0-9_-]+)"', html)
                 if cid_match:
                     return f"https://www.youtube.com/feeds/videos.xml?channel_id={cid_match.group(1)}", feed_type, suggested_title
         except Exception:
             pass
 
-    # Substack URL
     if "substack.com" in raw_url:
         feed_type = "substack"
         if not raw_url.endswith("/feed"):
             clean_url = raw_url.rstrip("/")
             return f"{clean_url}/feed", feed_type, suggested_title
 
-    # Default RSS URL
     return raw_url, feed_type, suggested_title
 
 def parse_youtube_feed_xml(xml_text: str, feed_id: int):
@@ -216,7 +210,9 @@ def parse_opml(opml_content: str):
         xml_url = outline.get('xmlUrl') or outline.get('xmlurl')
         html_url = outline.get('htmlUrl') or outline.get('htmlurl')
         title = outline.get('title') or outline.get('text') or "Feed"
+        category = outline.get('category') or "General"
         
+        # Check parent outline for category if any
         if xml_url:
             feed_type = 'rss'
             channel_id = None
@@ -234,7 +230,7 @@ def parse_opml(opml_content: str):
                 "site_url": html_url or "",
                 "feed_type": feed_type,
                 "channel_id": channel_id,
-                "custom_category": outline.get('category') or "General"
+                "custom_category": category
             })
             
     return feeds

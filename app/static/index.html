@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>FocusFeed</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,7 +12,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
-      darkMode: 'class',
       theme: {
         extend: {
           fontFamily: {
@@ -20,18 +19,12 @@
             serif: ['Newsreader', 'Georgia', 'serif'],
           },
           colors: {
-            app: {
-              bg: '#000000',
-              card: '#121212',
-              cardHover: '#1a1a1a',
-              border: '#242424',
-              subtle: '#333333',
-              accent: '#3b82f6',
-              accentLight: '#60a5fa',
-              success: '#10b981',
-              youtube: '#ff0000',
-              text: '#f3f4f6',
-              muted: '#9ca3af'
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
             }
           }
         }
@@ -40,65 +33,68 @@
   </script>
   <style>
     body {
-      padding-top: max(env(safe-area-inset-top), 12px);
-      padding-bottom: max(env(safe-area-inset-bottom), 72px);
+      padding-top: max(env(safe-area-inset-top), 10px);
+      padding-bottom: max(env(safe-area-inset-bottom), 76px);
       -webkit-tap-highlight-color: transparent;
-      background-color: #000000;
-      color: #f3f4f6;
+      background-color: #f8fafc;
+      color: #0f172a;
     }
     .custom-scrollbar::-webkit-scrollbar { display: none; }
     .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .bottom-nav-safe {
-      padding-bottom: max(env(safe-area-inset-bottom), 14px);
+      padding-bottom: max(env(safe-area-inset-bottom), 12px);
+    }
+    .line-clamp-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
   </style>
 </head>
 <body class="font-sans min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
 
-  <!-- Top Native Navigation Bar -->
-  <header class="sticky top-0 z-40 bg-black/90 backdrop-blur-xl border-b border-app-border/80 px-4 py-2.5">
+  <!-- Top Clean Navigation Bar (Feedly / Substack style) -->
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-slate-200 px-4 py-2.5 shadow-sm">
     <div class="max-w-2xl mx-auto flex items-center justify-between">
       <div class="flex items-center space-x-2">
-        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-950">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/20">
           <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         </div>
         <div>
-          <h1 class="text-base font-extrabold tracking-tight text-white flex items-center gap-1.5">
-            FocusFeed
-          </h1>
+          <h1 class="text-base font-extrabold tracking-tight text-slate-900">FocusFeed</h1>
         </div>
       </div>
 
-      <!-- Quick Action Icons -->
-      <div class="flex items-center space-x-1.5">
-        <button onclick="syncFeeds()" id="sync-btn" title="Actualizar feeds" class="w-8 h-8 rounded-full bg-app-card hover:bg-app-cardHover flex items-center justify-center text-slate-300 border border-app-border transition">
+      <!-- Actions -->
+      <div class="flex items-center space-x-2">
+        <button onclick="syncFeeds()" id="sync-btn" title="Sincronizar feeds" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 border border-slate-200 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
-        <button onclick="openModal('modal-add')" title="Agregar canal o OPML" class="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-950 transition">
+        <button onclick="openModal('modal-add')" title="Agregar canal o OPML" class="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-600/30 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- Feedly/Substack Style Category & Filter Chips -->
-  <section class="sticky top-[53px] z-30 bg-black/95 backdrop-blur-xl border-b border-app-border px-4 py-2">
+  <!-- Filter & Segment Tabs -->
+  <section class="sticky top-[53px] z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-2">
     <div class="max-w-2xl mx-auto flex items-center justify-between gap-2 overflow-x-auto custom-scrollbar">
-      <div class="flex items-center space-x-2 text-xs font-semibold">
-        <button onclick="setTab('curated')" id="tab-curated" class="px-3.5 py-1.5 rounded-full bg-white text-black font-bold flex items-center gap-1.5 shadow-sm transition">
+      <div class="flex items-center space-x-1.5 text-xs font-semibold">
+        <button onclick="setTab('curated')" id="tab-curated" class="px-3.5 py-1.5 rounded-full bg-slate-900 text-white font-bold flex items-center gap-1.5 shadow-sm transition">
           <span>✦</span> Para ti (IA)
         </button>
-        <button onclick="setTab('reading')" id="tab-reading" class="px-3.5 py-1.5 rounded-full bg-app-card text-slate-400 hover:text-white border border-app-border transition flex items-center gap-1">
+        <button onclick="setTab('reading')" id="tab-reading" class="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1">
           <span>🔖</span> Guardados (<span id="count-reading">0</span>)
         </button>
-        <button onclick="setTab('inbox')" id="tab-inbox" class="px-3.5 py-1.5 rounded-full bg-app-card text-slate-400 hover:text-white border border-app-border transition flex items-center gap-1">
-          <span>📥</span> Todo
+        <button onclick="setTab('inbox')" id="tab-inbox" class="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1">
+          <span>📥</span> Todos
         </button>
       </div>
 
-      <!-- Type Filter -->
-      <select id="filter-type" onchange="loadItems()" class="bg-app-card text-slate-300 text-xs rounded-full px-2.5 py-1 border border-app-border outline-none shrink-0">
-        <option value="all">Todo</option>
+      <select id="filter-type" onchange="loadItems()" class="bg-slate-100 text-slate-700 text-xs rounded-full px-2.5 py-1.5 border border-slate-200 outline-none shrink-0 font-medium">
+        <option value="all">Todo tipo</option>
         <option value="video">Videos</option>
         <option value="article">Artículos</option>
       </select>
@@ -106,86 +102,86 @@
   </section>
 
   <!-- Main Feed Stream -->
-  <main class="flex-1 max-w-2xl w-full mx-auto px-4 py-4 space-y-6">
-    <!-- Active Learning Profile Pill / Topic Indicator -->
-    <div class="bg-gradient-to-r from-blue-950/30 via-app-card to-app-card border border-blue-500/20 rounded-2xl p-3.5 flex items-center justify-between text-xs text-slate-300">
+  <main class="flex-1 max-w-2xl w-full mx-auto px-4 py-4 space-y-4">
+    <!-- Active Topics Card -->
+    <div class="bg-white border border-blue-100 rounded-2xl p-3.5 flex items-center justify-between text-xs shadow-sm">
       <div class="flex items-center space-x-2.5">
-        <span class="text-blue-400 text-base">🧠</span>
+        <span class="text-blue-600 text-base">🧠</span>
         <div>
-          <span class="font-bold text-white">IA con Aprendizaje Activo:</span>
-          <span id="learning-summary" class="text-slate-400 text-[11px] block">Califica con ❤️ o 👎 para entrenar tus recomendaciones.</span>
+          <span class="font-bold text-slate-900">Curación con Aprendizaje Activo</span>
+          <span id="learning-summary" class="text-slate-500 text-[11px] block">Ponderando según tus calificaciones con ❤️ o 👎.</span>
         </div>
       </div>
-      <button onclick="openModal('modal-learned')" class="text-blue-400 hover:text-blue-300 font-semibold text-[11px] shrink-0 ml-2 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20">
-        Ver perfil IA
+      <button onclick="openModal('modal-learned')" class="text-blue-600 hover:text-blue-700 font-semibold text-[11px] shrink-0 ml-2 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200">
+        Ver perfil
       </button>
     </div>
 
-    <!-- Feed Cards Container -->
-    <div id="items-list" class="space-y-6">
-      <div class="text-center py-16 text-slate-500 text-xs">Cargando tu feed curado...</div>
+    <!-- Feed Items Container -->
+    <div id="items-list" class="space-y-4">
+      <div class="text-center py-16 text-slate-400 text-xs">Cargando contenido...</div>
     </div>
   </main>
 
-  <!-- Bottom Native Tab Bar (iOS style) -->
-  <footer class="fixed bottom-0 left-0 right-0 z-40 bg-black/95 backdrop-blur-2xl border-t border-app-border bottom-nav-safe">
-    <div class="max-w-2xl mx-auto flex items-center justify-around py-1.5 text-[10px] font-medium text-slate-400">
-      <button onclick="setTab('curated')" class="flex flex-col items-center gap-1 text-white">
+  <!-- Bottom Navigation Bar (Feedly / Substack style) -->
+  <footer class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-2xl border-t border-slate-200 bottom-nav-safe shadow-lg">
+    <div class="max-w-2xl mx-auto flex items-center justify-around py-2 text-[10px] font-semibold text-slate-500">
+      <button onclick="setTab('curated')" class="flex flex-col items-center gap-1 text-blue-600">
         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
         <span>Para ti</span>
       </button>
-      <button onclick="setTab('reading')" class="flex flex-col items-center gap-1 hover:text-white transition">
+      <button onclick="setTab('reading')" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
         <span>Guardados</span>
       </button>
-      <button onclick="setTab('inbox')" class="flex flex-col items-center gap-1 hover:text-white transition">
+      <button onclick="setTab('inbox')" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
         <span>Todos</span>
       </button>
-      <button onclick="openModal('modal-learned')" class="flex flex-col items-center gap-1 hover:text-white transition">
+      <button onclick="openModal('modal-learned')" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
         <span>IA & Gustos</span>
       </button>
     </div>
   </footer>
 
-  <!-- Modal: Calificar / Entrenar IA para un Item -->
-  <div id="modal-feedback" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-app-card border border-app-border rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-app-border pb-3">
-        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+  <!-- Modal: Calificar / Entrenar IA -->
+  <div id="modal-feedback" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white border border-slate-200 rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
           <span>⭐</span> Calificar y Entrenar Curador IA
         </h3>
-        <button onclick="closeModal('modal-feedback')" class="p-1 text-slate-400 hover:text-white">
+        <button onclick="closeModal('modal-feedback')" class="p-1 text-slate-400 hover:text-slate-600">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
       <div class="space-y-3 text-xs">
         <div>
-          <p id="feedback-item-title" class="font-bold text-slate-200 text-xs line-clamp-1 mb-2">Título</p>
-          <div class="flex items-center justify-around bg-black/60 p-2.5 rounded-xl border border-app-border">
-            <button onclick="selectQuickRating('love')" id="rate-btn-love" class="px-3 py-2 rounded-lg hover:bg-app-card flex flex-col items-center gap-1 transition">
+          <p id="feedback-item-title" class="font-bold text-slate-800 text-xs line-clamp-1 mb-2">Título</p>
+          <div class="flex items-center justify-around bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+            <button onclick="selectQuickRating('love')" id="rate-btn-love" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
               <span class="text-xl">❤️</span>
-              <span class="text-[10px] text-slate-300">Me encanta</span>
+              <span class="text-[10px] font-semibold text-slate-700">Me encanta</span>
             </button>
-            <button onclick="selectQuickRating('like')" id="rate-btn-like" class="px-3 py-2 rounded-lg hover:bg-app-card flex flex-col items-center gap-1 transition">
+            <button onclick="selectQuickRating('like')" id="rate-btn-like" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
               <span class="text-xl">👍</span>
-              <span class="text-[10px] text-slate-300">Relevante</span>
+              <span class="text-[10px] font-semibold text-slate-700">Relevante</span>
             </button>
-            <button onclick="selectQuickRating('dislike')" id="rate-btn-dislike" class="px-3 py-2 rounded-lg hover:bg-app-card flex flex-col items-center gap-1 transition">
+            <button onclick="selectQuickRating('dislike')" id="rate-btn-dislike" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
               <span class="text-xl">👎</span>
-              <span class="text-[10px] text-slate-300">No relevante</span>
+              <span class="text-[10px] font-semibold text-slate-700">No relevante</span>
             </button>
           </div>
         </div>
 
         <div>
-          <label class="font-semibold text-slate-300 block mb-1">Comentario o Instrucción para la IA (opcional):</label>
-          <textarea id="feedback-comment" rows="3" placeholder="Ej: Me interesan mucho estos análisis técnicos, pero con menos enfoque en noticias del día..." class="w-full bg-black border border-app-border rounded-xl p-3 text-slate-200 text-xs outline-none focus:border-blue-500"></textarea>
+          <label class="font-semibold text-slate-700 block mb-1">Comentario o Instrucción para la IA:</label>
+          <textarea id="feedback-comment" rows="3" placeholder="Ej: Me interesan mucho estos análisis, pero con menos enfoque en noticias del día..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 text-xs outline-none focus:border-blue-500 focus:bg-white"></textarea>
         </div>
 
-        <button onclick="submitItemFeedback()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-lg shadow-blue-950">
+        <button onclick="submitItemFeedback()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-md shadow-blue-500/20">
           Guardar y Calibrar IA
         </button>
       </div>
@@ -193,30 +189,30 @@
   </div>
 
   <!-- Modal: Agregar Canales / OPML -->
-  <div id="modal-add" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="bg-app-card border border-app-border rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-app-border pb-3">
-        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+  <div id="modal-add" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
           <span>➕</span> Agregar Suscripciones
         </h3>
-        <button onclick="closeModal('modal-add')" class="p-1 text-slate-400 hover:text-white">
+        <button onclick="closeModal('modal-add')" class="p-1 text-slate-400 hover:text-slate-600">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
       <div class="space-y-3 text-xs">
         <div>
-          <label class="text-slate-300 font-medium block mb-1">Pega el link de un canal de YouTube, Blog o Substack:</label>
-          <input type="text" id="feed-url-input" placeholder="https://www.youtube.com/@AndrejKarpathy o RSS" class="w-full bg-black border border-app-border rounded-xl px-3 py-2.5 text-slate-200 text-xs outline-none focus:border-blue-500">
+          <label class="text-slate-700 font-semibold block mb-1">Pega el link de un canal de YouTube, Blog o Substack:</label>
+          <input type="text" id="feed-url-input" placeholder="https://www.youtube.com/@Canal o Substack" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 text-xs outline-none focus:border-blue-500 focus:bg-white">
         </div>
-        <button onclick="addSingleFeed()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs">
+        <button onclick="addSingleFeed()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-sm">
           + Agregar Canal
         </button>
 
-        <div class="border-t border-app-border pt-3 space-y-2">
-          <label class="text-slate-400 font-medium block">O pega el contenido de tu archivo OPML (Feedly / YouTube):</label>
-          <textarea id="opml-input" rows="3" placeholder="<opml version='1.0'>...</textarea>" class="w-full bg-black border border-app-border rounded-xl p-2.5 font-mono text-[10px] text-slate-300 outline-none"></textarea>
-          <button onclick="importOpml()" class="w-full bg-app-subtle hover:bg-slate-700 text-white font-semibold py-2 rounded-xl transition text-xs">
+        <div class="border-t border-slate-200 pt-3 space-y-2">
+          <label class="text-slate-700 font-semibold block">O pega tu archivo OPML (Feedly / YouTube):</label>
+          <textarea id="opml-input" rows="4" placeholder="<opml version='1.0'>...</textarea>" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-mono text-[10px] text-slate-800 outline-none focus:bg-white"></textarea>
+          <button onclick="importOpml()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2 rounded-xl transition text-xs">
             Importar todas las suscripciones
           </button>
         </div>
@@ -224,40 +220,36 @@
     </div>
   </div>
 
-  <!-- Modal: Ver qué ha aprendido la IA -->
-  <div id="modal-learned" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="bg-app-card border border-app-border rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar">
-      <div class="flex items-center justify-between border-b border-app-border pb-3">
-        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+  <!-- Modal: Ver Preferencias IA -->
+  <div id="modal-learned" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
           <span>🧠</span> Preferencias Aprendidas por la IA
         </h3>
-        <button onclick="closeModal('modal-learned')" class="p-1 text-slate-400 hover:text-white">
+        <button onclick="closeModal('modal-learned')" class="p-1 text-slate-400 hover:text-slate-600">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
       <div class="space-y-4 text-xs">
-        <p class="text-slate-400 leading-relaxed">
-          FocusFeed va construyendo un perfil dinámico basado en tus calificaciones (❤️ / 👎). Así es como la IA pondera el contenido:
+        <p class="text-slate-600 leading-relaxed">
+          FocusFeed construye este perfil dinámico a partir de tus interacciones (❤️ / 👎 / calificaciones) para priorizar lo que realmente te interesa:
         </p>
 
-        <div class="bg-black/60 p-3 rounded-xl border border-app-border space-y-2">
-          <h4 class="font-bold text-emerald-400 text-xs">🏆 Canales y Autores con Boost Positivo</h4>
-          <div id="learned-authors-list" class="flex flex-wrap gap-1.5 text-[11px]">
-            <!-- Dynamic tags -->
-          </div>
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+          <h4 class="font-bold text-emerald-700 text-xs">🏆 Canales y Autores con Boost Positivo</h4>
+          <div id="learned-authors-list" class="flex flex-wrap gap-1.5 text-[11px]"></div>
         </div>
 
-        <div class="bg-black/60 p-3 rounded-xl border border-app-border space-y-2">
-          <h4 class="font-bold text-blue-400 text-xs">🎯 Temas con Mayor Afinidad</h4>
-          <div id="learned-tags-list" class="flex flex-wrap gap-1.5 text-[11px]">
-            <!-- Dynamic tags -->
-          </div>
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+          <h4 class="font-bold text-blue-700 text-xs">🎯 Temas con Mayor Afinidad</h4>
+          <div id="learned-tags-list" class="flex flex-wrap gap-1.5 text-[11px]"></div>
         </div>
 
-        <div class="bg-black/60 p-3 rounded-xl border border-app-border space-y-2">
-          <h4 class="font-bold text-slate-300 text-xs">📝 Temas Base de Enfoque</h4>
-          <textarea id="edit-focus-topics" rows="4" class="w-full bg-black border border-app-border rounded-xl p-2.5 text-slate-200 text-xs outline-none"></textarea>
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+          <h4 class="font-bold text-slate-800 text-xs">📝 Temas Base de Enfoque</h4>
+          <textarea id="edit-focus-topics" rows="4" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 text-xs outline-none focus:border-blue-500"></textarea>
           <button onclick="saveTopicsFromModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-xl text-xs">
             Actualizar Temas
           </button>
@@ -267,7 +259,7 @@
   </div>
 
   <!-- Toast -->
-  <div id="toast" class="fixed top-5 right-5 z-50 bg-app-card border border-app-border text-white text-xs px-4 py-2.5 rounded-full shadow-2xl transform -translate-y-16 opacity-0 transition duration-200 flex items-center gap-2">
+  <div id="toast" class="fixed top-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-full shadow-2xl transform -translate-y-16 opacity-0 transition duration-200 flex items-center gap-2">
     <span id="toast-icon">✓</span>
     <span id="toast-msg">Mensaje</span>
   </div>
@@ -302,9 +294,9 @@
         const btn = document.getElementById(`tab-${t}`);
         if (!btn) return;
         if (t === tab) {
-          btn.className = "px-3.5 py-1.5 rounded-full bg-white text-black font-bold flex items-center gap-1.5 shadow-sm transition";
+          btn.className = "px-3.5 py-1.5 rounded-full bg-slate-900 text-white font-bold flex items-center gap-1.5 shadow-sm transition";
         } else {
-          btn.className = "px-3.5 py-1.5 rounded-full bg-app-card text-slate-400 hover:text-white border border-app-border transition flex items-center gap-1";
+          btn.className = "px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1";
         }
       });
       loadItems();
@@ -313,7 +305,7 @@
     async function loadItems() {
       const typeFilter = document.getElementById('filter-type').value;
       const listEl = document.getElementById('items-list');
-      listEl.innerHTML = '<div class="text-center py-16 text-slate-500 text-xs">Cargando tu feed curado...</div>';
+      listEl.innerHTML = '<div class="text-center py-16 text-slate-400 text-xs">Cargando tu feed curado...</div>';
 
       try {
         const res = await fetch(`/api/items?tab=${currentTab}&type=${typeFilter}`);
@@ -326,7 +318,7 @@
 
         renderFeed(cachedItems);
       } catch (err) {
-        listEl.innerHTML = `<div class="text-center py-8 text-red-400 text-xs">Error: ${err.message}</div>`;
+        listEl.innerHTML = `<div class="text-center py-8 text-red-500 text-xs">Error: ${err.message}</div>`;
       }
     }
 
@@ -334,103 +326,99 @@
       const listEl = document.getElementById('items-list');
       if (!items || items.length === 0) {
         listEl.innerHTML = `
-          <div class="text-center py-16 bg-app-card rounded-2xl border border-app-border p-6 space-y-2">
+          <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6 space-y-2 shadow-sm">
             <div class="text-3xl">🌿</div>
-            <h3 class="text-sm font-semibold text-white">Todo al día</h3>
-            <p class="text-xs text-slate-400 max-w-sm mx-auto">No hay contenido pendiente en esta categoría.</p>
+            <h3 class="text-sm font-bold text-slate-900">Todo al día</h3>
+            <p class="text-xs text-slate-500 max-w-sm mx-auto">No hay contenido en esta categoría. Puedes sincronizar o importar tus suscripciones con el botón (+).</p>
           </div>
         `;
         return;
       }
 
-      listEl.innerHTML = items.map((item, index) => {
+      listEl.innerHTML = items.map((item) => {
         const score = item.relevance_score || 0;
         const isVideo = item.content_type === 'video';
         const takeaways = item.key_takeaways ? (typeof item.key_takeaways === 'string' ? JSON.parse(item.key_takeaways) : item.key_takeaways) : [];
         
-        let matchBadge = `<span class="text-[11px] font-bold text-blue-400 flex items-center gap-1">✦ ${score}% Match</span>`;
+        let matchBadge = `<span class="text-[11px] font-bold text-blue-600 flex items-center gap-1">✦ ${score}% Match</span>`;
         if (score >= 90) {
-          matchBadge = `<span class="text-[11px] font-bold text-emerald-400 flex items-center gap-1">✦ ${score}% Top Match</span>`;
+          matchBadge = `<span class="text-[11px] font-bold text-emerald-600 flex items-center gap-1">✦ ${score}% Top Match</span>`;
         }
 
-        // Substack / Feedly / YouTube polished layouts
+        // Clean Light-Mode Card (Feedly / Substack Aesthetic)
         if (isVideo) {
-          // YouTube 16:9 Full-Bleed Video Card with Native Style
           return `
-            <article class="bg-app-card border border-app-border/70 hover:border-app-border rounded-2xl overflow-hidden transition shadow-xl space-y-3 pb-3.5">
+            <article class="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden transition shadow-sm hover:shadow-md space-y-3 pb-3.5">
               <!-- Video Cover Thumbnail -->
-              <a href="${item.url}" target="_blank" class="block relative aspect-video bg-neutral-900 group">
-                <img src="${item.thumbnail_url || 'https://i.ytimg.com/vi/' + item.video_id + '/hqdefault.jpg'}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300 opacity-90 group-hover:opacity-100">
-                <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-                <div class="absolute bottom-2.5 right-2.5 bg-black/90 px-2 py-0.5 rounded-md text-[11px] font-bold text-white tracking-wide">
+              <a href="${item.url}" target="_blank" class="block relative aspect-video bg-slate-950 group">
+                <img src="${item.thumbnail_url || 'https://i.ytimg.com/vi/' + item.video_id + '/hqdefault.jpg'}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                <div class="absolute bottom-2.5 right-2.5 bg-black/80 px-2 py-0.5 rounded-md text-[10px] font-bold text-white tracking-wide">
                   ▶ YouTube
                 </div>
               </a>
 
-              <!-- Content Meta -->
+              <!-- Meta & Title -->
               <div class="px-4 space-y-2">
                 <div class="flex items-center justify-between text-xs">
-                  <div class="flex items-center space-x-2">
+                  <div class="flex items-center space-x-1.5">
                     <span class="w-2 h-2 rounded-full bg-red-600"></span>
-                    <span class="font-bold text-white text-xs">${item.author}</span>
+                    <span class="font-bold text-slate-800 text-xs">${item.author}</span>
                   </div>
                   <div>${matchBadge}</div>
                 </div>
 
-                <h2 class="text-base font-bold text-white leading-snug">
-                  <a href="${item.url}" target="_blank" class="hover:text-blue-400 transition">
+                <h2 class="text-base font-bold text-slate-900 leading-snug">
+                  <a href="${item.url}" target="_blank" class="hover:text-blue-600 transition">
                     ${item.title}
                   </a>
                 </h2>
 
-                <!-- AI Quick Hook -->
                 ${item.curator_note ? `
-                  <p class="text-xs text-slate-300 leading-relaxed italic">
-                    💡 ${item.curator_note}
+                  <p class="text-xs text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    💡 <strong>Por qué verlo:</strong> ${item.curator_note}
                   </p>
                 ` : ''}
 
-                <!-- AI Summary Accordion (YouTube Style: ✦ Summary ▾) -->
-                <div class="bg-black/60 border border-app-border/80 rounded-xl p-3 space-y-2 text-xs">
+                <!-- AI Summary Accordion (YouTube Style) -->
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
                   <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
-                    <div class="font-bold text-slate-200 flex items-center gap-1 text-[11px] tracking-wide">
-                      <span class="text-blue-400">✦</span> Resumen y Puntos Clave
+                    <div class="font-bold text-slate-800 flex items-center gap-1 text-[11px]">
+                      <span class="text-blue-600">✦</span> Resumen y Puntos Clave
                     </div>
-                    <button id="toggle-btn-${item.id}" class="text-blue-400 font-semibold text-xs">
+                    <button id="toggle-btn-${item.id}" class="text-blue-600 font-bold text-xs">
                       Desplegar ▾
                     </button>
                   </div>
 
-                  <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-app-border/70 space-y-2 text-slate-300 leading-relaxed">
-                    <p class="whitespace-pre-line text-xs font-normal">${item.summary_tldr || 'Resumen disponible.'}</p>
+                  <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-slate-200 space-y-2 text-slate-700 leading-relaxed">
+                    <p class="whitespace-pre-line text-xs">${item.summary_tldr || 'Resumen disponible.'}</p>
                     ${takeaways.length > 0 ? `
-                      <ul class="space-y-1 text-xs text-slate-300 list-disc list-inside pt-1">
+                      <ul class="space-y-1 text-xs text-slate-700 list-disc list-inside pt-1">
                         ${takeaways.map(t => `<li>${t}</li>`).join('')}
                       </ul>
                     ` : ''}
                   </div>
                 </div>
 
-                <!-- Card Bottom Rating & Action Bar -->
-                <div class="flex items-center justify-between pt-2 border-t border-app-border/60 text-xs">
-                  <!-- Fast Reaction / RLHF Buttons -->
+                <!-- Rating & Actions Bar -->
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                   <div class="flex items-center space-x-1">
-                    <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-app-subtle text-slate-400 hover:text-red-400 transition text-sm">
+                    <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition text-sm">
                       ${item.user_rating === 'love' ? '❤️' : '🤍'}
                     </button>
-                    <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-app-subtle text-slate-400 hover:text-white transition text-sm">
+                    <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-800 transition text-sm">
                       ${item.user_rating === 'dislike' ? '👎' : '🤍'}
                     </button>
-                    <button onclick="openFeedbackModal(${item.id})" class="px-2 py-1 rounded-lg bg-black hover:bg-app-subtle text-slate-300 text-[11px] font-semibold border border-app-border transition">
+                    <button onclick="openFeedbackModal(${item.id})" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-semibold border border-slate-200 transition">
                       💬 Calificar
                     </button>
                   </div>
 
                   <div class="flex items-center space-x-2">
-                    <button onclick="updateItemStatus(${item.id}, '${item.status === 'reading' ? 'inbox' : 'reading'}')" class="p-1.5 rounded-lg hover:bg-app-subtle text-slate-300 text-xs font-medium">
+                    <button onclick="updateItemStatus(${item.id}, '${item.status === 'reading' ? 'inbox' : 'reading'}')" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 font-medium">
                       ${item.status === 'reading' ? '🔖 Guardado' : '🔖 Guardar'}
                     </button>
-                    <button onclick="updateItemStatus(${item.id}, 'archived')" class="p-1.5 rounded-lg hover:bg-app-subtle text-slate-400 hover:text-white text-xs">
+                    <button onclick="updateItemStatus(${item.id}, 'archived')" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800">
                       ✓ Visto
                     </button>
                   </div>
@@ -439,63 +427,61 @@
             </article>
           `;
         } else {
-          // Feedly / Substack Magazine Layout (Split Card)
+          // Feedly / Substack Magazine Light Card
           return `
-            <article class="bg-app-card border border-app-border/70 hover:border-app-border rounded-2xl p-4 transition shadow-lg space-y-3">
-              <!-- Top Category Header (Feedly style) -->
+            <article class="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-4 sm:p-5 transition shadow-sm hover:shadow-md space-y-3">
               <div class="flex items-center justify-between text-xs">
-                <span class="font-bold text-blue-400 uppercase text-[10px] tracking-wider">${item.author}</span>
+                <span class="font-bold text-blue-600 uppercase text-[10px] tracking-wider">${item.author}</span>
                 <div>${matchBadge}</div>
               </div>
 
-              <!-- Main Content & Title -->
               <div>
-                <h2 class="text-base font-bold text-white font-serif leading-snug">
-                  <a href="${item.url}" target="_blank" class="hover:text-blue-400 transition">
+                <h2 class="text-base sm:text-lg font-bold text-slate-900 font-serif leading-snug">
+                  <a href="${item.url}" target="_blank" class="hover:text-blue-600 transition">
                     ${item.title}
                   </a>
                 </h2>
-                <p class="text-xs text-slate-400 font-sans mt-1.5 line-clamp-2 leading-relaxed">
+                <p class="text-xs text-slate-600 font-sans mt-1.5 line-clamp-2 leading-relaxed">
                   ${item.summary_tldr || item.raw_content || ''}
                 </p>
               </div>
 
-              <!-- AI Summary Accordion -->
-              <div class="bg-black/60 border border-app-border/80 rounded-xl p-3 space-y-2 text-xs">
+              <!-- AI Accordion -->
+              <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
                 <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
-                  <div class="font-bold text-slate-200 flex items-center gap-1 text-[11px]">
-                    <span class="text-blue-400">✦</span> Puntos Clave
+                  <div class="font-bold text-slate-800 flex items-center gap-1 text-[11px]">
+                    <span class="text-blue-600">✦</span> Puntos Clave
                   </div>
-                  <button id="toggle-btn-${item.id}" class="text-blue-400 font-semibold text-xs">
+                  <button id="toggle-btn-${item.id}" class="text-blue-600 font-bold text-xs">
                     Desplegar ▾
                   </button>
                 </div>
 
-                <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-app-border/70 space-y-2 text-slate-300">
+                <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-slate-200 space-y-2 text-slate-700">
                   ${takeaways.length > 0 ? `
-                    <ul class="space-y-1 text-xs text-slate-300 list-disc list-inside">
+                    <ul class="space-y-1 text-xs text-slate-700 list-disc list-inside">
                       ${takeaways.map(t => `<li>${t}</li>`).join('')}
                     </ul>
                   ` : ''}
                 </div>
               </div>
 
-              <!-- Card Bottom Actions -->
-              <div class="flex items-center justify-between pt-1 border-t border-app-border/60 text-xs">
+              <!-- Bottom Actions -->
+              <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
                 <div class="flex items-center space-x-1">
-                  <button onclick="quickRate(${item.id}, 'love')" class="p-1.5 rounded hover:bg-app-subtle text-slate-400 hover:text-red-400">
+                  <button onclick="quickRate(${item.id}, 'love')" class="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-red-500">
                     ${item.user_rating === 'love' ? '❤️' : '🤍'}
                   </button>
-                  <button onclick="openFeedbackModal(${item.id})" class="px-2 py-1 rounded bg-black text-slate-300 text-[11px] font-semibold border border-app-border">
+                  <button onclick="openFeedbackModal(${item.id})" class="px-2 py-1 rounded bg-white text-slate-700 text-[11px] font-semibold border border-slate-200">
                     💬 Calificar
                   </button>
                 </div>
 
                 <div class="flex items-center space-x-2">
-                  <a href="${item.url}" target="_blank" class="text-blue-400 hover:text-blue-300 font-semibold">
+                  <a href="${item.url}" target="_blank" class="text-blue-600 hover:text-blue-700 font-bold">
                     Leer ↗
                   </a>
-                  <button onclick="updateItemStatus(${item.id}, 'archived')" class="text-slate-400 hover:text-white">
+                  <button onclick="updateItemStatus(${item.id}, 'archived')" class="text-slate-500 hover:text-slate-800">
                     ✓ Visto
                   </button>
                 </div>
@@ -525,11 +511,11 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ rating })
         });
-        showToast(rating === 'love' ? '¡Guardado en tus preferencias! (+Relevancia)' : 'Entendido, reduciremos este tipo de contenido');
+        showToast(rating === 'love' ? '¡Guardado! (+Relevancia)' : 'Entendido, reduciremos este tipo de contenido');
         await loadItems();
         await loadProfile();
       } catch (err) {
-        showToast('Error al guardar calificación', '⚠️');
+        showToast('Error al calificar', '⚠️');
       }
     }
 
@@ -548,9 +534,9 @@
       ['love', 'like', 'dislike'].forEach(r => {
         const btn = document.getElementById(`rate-btn-${r}`);
         if (r === rating) {
-          btn.className = "px-3 py-2 rounded-lg bg-blue-600/30 border border-blue-500 flex flex-col items-center gap-1 transition";
+          btn.className = "px-3 py-2 rounded-lg bg-blue-100 border border-blue-500 flex flex-col items-center gap-1 transition shadow-sm";
         } else {
-          btn.className = "px-3 py-2 rounded-lg hover:bg-app-card border border-transparent flex flex-col items-center gap-1 transition opacity-70";
+          btn.className = "px-3 py-2 rounded-lg hover:bg-slate-100 border border-transparent flex flex-col items-center gap-1 transition opacity-70";
         }
       });
     }
@@ -589,7 +575,7 @@
 
     async function syncFeeds() {
       const btn = document.getElementById('sync-btn');
-      btn.innerHTML = `<span class="animate-spin text-blue-400">↻</span>`;
+      btn.innerHTML = `<span class="animate-spin text-blue-600">↻</span>`;
       try {
         const res = await fetch('/api/feeds/sync', { method: 'POST' });
         const data = await res.json();
@@ -611,10 +597,10 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ url })
         });
-        showToast('Canal agregado y procesado');
+        showToast('Canal agregado');
         document.getElementById('feed-url-input').value = '';
         closeModal('modal-add');
-        await syncFeeds();
+        await loadItems();
       } catch (err) {
         showToast('Error al agregar canal', '⚠️');
       }
@@ -633,7 +619,7 @@
         showToast(`Importadas ${data.imported_count || 0} suscripciones`);
         document.getElementById('opml-input').value = '';
         closeModal('modal-add');
-        await syncFeeds();
+        await loadItems();
       } catch (err) {
         showToast('Error al importar OPML', '⚠️');
       }
@@ -645,15 +631,13 @@
         const prof = await res.json();
         const learned = prof.learned_preferences || {};
         
-        // Render learned authors
         const authorsList = document.getElementById('learned-authors-list');
         const authors = learned.boosted_authors || [];
-        authorsList.innerHTML = authors.map(a => `<span class="px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40">✓ ${a}</span>`).join('') || '<span class="text-slate-500">Aún no has calificado autores.</span>';
+        authorsList.innerHTML = authors.map(a => `<span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">✓ ${a}</span>`).join('') || '<span class="text-slate-400">Aún no has calificado autores.</span>';
 
-        // Render learned tags
         const tagsList = document.getElementById('learned-tags-list');
         const tags = Object.keys(learned.boosted_tags || {});
-        tagsList.innerHTML = tags.map(t => `<span class="px-2.5 py-1 rounded-full bg-blue-950 text-blue-300 border border-blue-500/40">★ ${t}</span>`).join('') || '<span class="text-slate-500">Dale ❤️ a los videos que te gusten para entrenar la IA.</span>';
+        tagsList.innerHTML = tags.map(t => `<span class="px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200">★ ${t}</span>`).join('') || '<span class="text-slate-400">Califica con ❤️ los videos o lecturas que te gusten.</span>';
 
         document.getElementById('edit-focus-topics').value = (prof.focus_topics || []).join('\n');
       } catch (err) {
