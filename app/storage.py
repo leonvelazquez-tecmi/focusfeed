@@ -26,15 +26,19 @@ def fetch_items(tab="curated", type_filter="all", limit=60):
         query += f"&limit={limit}"
         res = supabase_request(query)
         items = res if isinstance(res, list) else []
-        
+        items_debug = get_supabase_debug_info()
+        if not isinstance(res, list):
+            items_debug["items_query_error"] = res
+            items_debug["items_query"] = query
+
         all_status = supabase_request("items?select=status")
         counts = {}
         if isinstance(all_status, list):
             for r in all_status:
                 s = r.get("status", "inbox")
                 counts[s] = counts.get(s, 0) + 1
-            
-        return {"items": items, "counts": counts, "debug": get_supabase_debug_info()}
+
+        return {"items": items, "counts": counts, "debug": items_debug}
     else:
         conn = get_db_connection()
         cursor = conn.cursor()
