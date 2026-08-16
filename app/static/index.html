@@ -579,8 +579,8 @@
                     <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition text-base">
                       ${item.user_rating === 'love' ? '❤️' : '🤍'}
                     </button>
-                    <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-800 transition text-base">
-                      ${item.user_rating === 'dislike' ? '👎' : '🤍'}
+                    <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-base ${item.user_rating === 'dislike' ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-0'}">
+                      👎
                     </button>
                     <button onclick="openFeedbackModal(${item.id})" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition whitespace-nowrap">
                       💬 Calificar
