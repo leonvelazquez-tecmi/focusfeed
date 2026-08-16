@@ -13,7 +13,7 @@ from app.storage import (
     fetch_items, set_item_status, save_user_feedback,
     fetch_feeds, create_or_update_feed, remove_feed,
     fetch_profile, save_profile_data, batch_save_items,
-    ensure_seed_if_empty
+    ensure_seed_if_empty, get_pending_item_ids
 )
 from app.ingestion import (
     parse_youtube_feed_xml, parse_rss_feed_xml, 
@@ -165,6 +165,27 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 record_feedback(item_id, rating, comment)
                 self.send_json_response({"status": "success", "item_id": item_id, "rating": rating})
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
+            return
+
+        # Process a batch of AI-pending items (used by the "Todo" tab to
+        # self-enrich items that only got default values on sync)
+        if path == "/api/items/process-pending":
+            limit = int(body.get("limit", 10))
+            try:
+                pending_ids = get_pending_item_ids(limit)
+                processed = 0
+                with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+                    futures = [executor.submit(process_item_ai, iid) for iid in pending_ids]
+                    for fut in concurrent.futures.as_completed(futures, timeout=8.5):
+                        try:
+                            if fut.result():
+                                processed += 1
+                        except Exception as e:
+                            print(f"process-pending: fallo al analizar item: {e}")
+                            continue
+                self.send_json_response({"status": "success", "processed": processed, "has_more": len(pending_ids) >= limit})
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return

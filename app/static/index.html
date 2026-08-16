@@ -293,6 +293,7 @@
     let activeFeedbackItemId = null;
     let selectedRating = 'love';
     let isSyncing = false;
+    let pendingEnrichRounds = 0;
 
     async function init() {
       await loadProfile();
@@ -315,7 +316,10 @@
 
     function setTab(tab) {
       currentTab = tab;
-      
+      if (tab === 'inbox') {
+        pendingEnrichRounds = 0;
+      }
+
       const isSources = (tab === 'sources');
       document.getElementById('items-list').classList.toggle('hidden', isSources);
       document.getElementById('sources-list').classList.toggle('hidden', !isSources);
@@ -360,8 +364,30 @@
         }
 
         renderFeed(cachedItems);
+
+        if (currentTab === 'inbox') {
+          triggerPendingEnrichment();
+        }
       } catch (err) {
         listEl.innerHTML = `<div class="text-center py-8 text-red-500 text-xs">Error: ${err.message}</div>`;
+      }
+    }
+
+    async function triggerPendingEnrichment() {
+      if (currentTab !== 'inbox' || pendingEnrichRounds >= 3) return;
+      pendingEnrichRounds++;
+      try {
+        const res = await fetch('/api/items/process-pending', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ limit: 10 })
+        });
+        const data = await res.json();
+        if (data.status === 'success' && data.processed > 0 && currentTab === 'inbox') {
+          await loadItems();
+        }
+      } catch (err) {
+        console.error('No se pudo analizar items pendientes:', err);
       }
     }
 
@@ -574,6 +600,12 @@
                 </p>
               </div>
 
+              ${item.curator_note ? `
+                <p class="text-xs text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  💡 <strong>Por qué leerlo:</strong> ${item.curator_note}
+                </p>
+              ` : ''}
+
               <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
                 <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
                   <div class="font-bold text-slate-800 flex items-center gap-1 text-[11px]">
@@ -632,16 +664,20 @@
 
     async function quickRate(itemId, rating) {
       try {
-        await fetch(`/api/items/${itemId}/feedback`, {
+        const res = await fetch(`/api/items/${itemId}/feedback`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ rating })
         });
+        const data = await res.json();
+        if (!res.ok || data.status === 'error') {
+          throw new Error(data.message || `HTTP ${res.status}`);
+        }
         showToast(rating === 'love' ? '¡Guardado! (+Relevancia)' : 'Entendido, reduciremos este contenido');
         await loadItems();
         await loadProfile();
       } catch (err) {
-        showToast('Error al calificar', '⚠️');
+        showToast('Error al calificar: ' + err.message, '⚠️');
       }
     }
 
@@ -671,17 +707,21 @@
       if (!activeFeedbackItemId) return;
       const comment = document.getElementById('feedback-comment').value.trim();
       try {
-        await fetch(`/api/items/${activeFeedbackItemId}/feedback`, {
+        const res = await fetch(`/api/items/${activeFeedbackItemId}/feedback`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ rating: selectedRating, comment })
         });
+        const data = await res.json();
+        if (!res.ok || data.status === 'error') {
+          throw new Error(data.message || `HTTP ${res.status}`);
+        }
         showToast('IA calibrada con tus comentarios ⭐');
         closeModal('modal-feedback');
         await loadItems();
         await loadProfile();
       } catch (err) {
-        showToast('Error al procesar feedback', '⚠️');
+        showToast('Error al procesar feedback: ' + err.message, '⚠️');
       }
     }
 

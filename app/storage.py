@@ -87,6 +87,77 @@ def save_user_feedback(item_id: int, rating: str, comment: str = ""):
         conn.commit()
         conn.close()
 
+def get_item_by_id(item_id: int):
+    if is_supabase():
+        res = supabase_request(f"items?id=eq.{item_id}&select=*&limit=1")
+        if isinstance(res, list) and res:
+            return res[0]
+        return None
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM items WHERE id = ?", (item_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+def update_learned_preferences(learned: dict):
+    now_iso = datetime.utcnow().isoformat()
+    learned_json = json.dumps(learned, ensure_ascii=False)
+    if is_supabase():
+        return supabase_request("user_profile?id=eq.1", method="PATCH", data={
+            "learned_preferences": learned_json,
+            "updated_at": now_iso
+        })
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+        UPDATE user_profile SET learned_preferences = ?, updated_at = ? WHERE id = 1
+        """, (learned_json, now_iso))
+        conn.commit()
+        conn.close()
+
+def get_pending_item_ids(limit: int = 10):
+    if is_supabase():
+        res = supabase_request(f"items?select=id&ai_processed=eq.0&order=published_at.desc&limit={limit}")
+        return [r["id"] for r in res] if isinstance(res, list) else []
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM items WHERE ai_processed = 0 ORDER BY published_at DESC LIMIT ?", (limit,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [r["id"] for r in rows]
+
+def save_item_analysis(item_id: int, analysis: dict):
+    now_iso = datetime.utcnow().isoformat()
+    data = {
+        "relevance_score": analysis["relevance_score"],
+        "summary_tldr": analysis["summary_tldr"],
+        "key_takeaways": json.dumps(analysis["key_takeaways"], ensure_ascii=False),
+        "curator_note": analysis["curator_note"],
+        "topic_tags": json.dumps(analysis["topic_tags"], ensure_ascii=False),
+        "ai_processed_at": now_iso
+    }
+    if is_supabase():
+        data["ai_processed"] = True
+        return supabase_request(f"items?id=eq.{item_id}", method="PATCH", data=data)
+    else:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+        UPDATE items SET
+            relevance_score = ?, summary_tldr = ?, key_takeaways = ?,
+            curator_note = ?, topic_tags = ?, ai_processed = 1, ai_processed_at = ?
+        WHERE id = ?
+        """, (
+            data["relevance_score"], data["summary_tldr"], data["key_takeaways"],
+            data["curator_note"], data["topic_tags"], data["ai_processed_at"], item_id
+        ))
+        conn.commit()
+        conn.close()
+
 def fetch_feeds():
     if is_supabase():
         res = supabase_request("feeds?select=*&order=custom_category.asc,title.asc")

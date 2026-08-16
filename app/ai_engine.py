@@ -2,7 +2,6 @@ import json
 import os
 import re
 import urllib.request
-from datetime import datetime
 from app.db import get_db_connection
 
 def get_user_profile():
@@ -50,35 +49,27 @@ def record_feedback(item_id: int, rating: str, comment: str = ""):
     Saves user rating ('love', 'like', 'dislike', 'none') and feedback comments,
     and dynamically adapts learned preferences.
     """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-    UPDATE items SET
-        user_rating = ?,
-        user_feedback_comment = ?,
-        feedback_at = ?
-    WHERE id = ?
-    """, (rating, comment, datetime.utcnow().isoformat(), item_id))
-    
-    # Fetch item metadata to update learned preference matrix
-    cursor.execute("SELECT * FROM items WHERE id = ?", (item_id,))
-    item = cursor.fetchone()
-    
+    from app.storage import save_user_feedback, get_item_by_id, update_learned_preferences, fetch_profile
+
+    save_user_feedback(item_id, rating, comment)
+
+    item = get_item_by_id(item_id)
+
     if item:
-        profile = get_user_profile()
+        profile = fetch_profile()
         learned = profile.get("learned_preferences", {})
         boosted_authors = set(learned.get("boosted_authors", []))
         boosted_tags = learned.get("boosted_tags", {})
         penalized_tags = learned.get("penalized_tags", {})
-        
+
         try:
-            tags = json.loads(item["topic_tags"]) if item["topic_tags"] else []
+            raw_tags = item.get("topic_tags")
+            tags = json.loads(raw_tags) if isinstance(raw_tags, str) and raw_tags else (raw_tags or [])
         except Exception:
             tags = []
-            
-        author = item["author"]
-        
+
+        author = item.get("author")
+
         if rating in ["love", "like"]:
             if author:
                 boosted_authors.add(author)
@@ -94,22 +85,14 @@ def record_feedback(item_id: int, rating: str, comment: str = ""):
                 penalized_tags[t] = penalized_tags.get(t, 0) + 2
                 if t in boosted_tags:
                     boosted_tags[t] = max(0, boosted_tags[t] - 1)
-                    
+
         updated_learned = {
             "boosted_authors": list(boosted_authors),
             "boosted_tags": boosted_tags,
             "penalized_tags": penalized_tags
         }
-        
-        cursor.execute("""
-        UPDATE user_profile SET
-            learned_preferences = ?,
-            updated_at = ?
-        WHERE id = 1
-        """, (json.dumps(updated_learned, ensure_ascii=False), datetime.utcnow().isoformat()))
-        
-    conn.commit()
-    conn.close()
+
+        update_learned_preferences(updated_learned)
 
 def analyze_with_llm(title: str, author: str, content_type: str, content_text: str, profile: dict) -> dict:
     topics_list = profile["focus_topics"]
@@ -245,18 +228,15 @@ Tu respuesta DEBE ser este JSON exacto:
     }
 
 def process_item_ai(item_id: int):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM items WHERE id = ?", (item_id,))
-    item = cursor.fetchone()
-    
+    from app.storage import get_item_by_id, save_item_analysis, fetch_profile
+
+    item = get_item_by_id(item_id)
     if not item:
-        conn.close()
         return None
-        
-    profile = get_user_profile()
-    content_text = item["transcript"] or item["raw_content"] or item["title"]
-    
+
+    profile = fetch_profile()
+    content_text = item.get("transcript") or item.get("raw_content") or item.get("title")
+
     analysis = analyze_with_llm(
         title=item["title"],
         author=item["author"],
@@ -264,39 +244,16 @@ def process_item_ai(item_id: int):
         content_text=content_text,
         profile=profile
     )
-    
-    cursor.execute("""
-    UPDATE items SET
-        relevance_score = ?,
-        summary_tldr = ?,
-        key_takeaways = ?,
-        curator_note = ?,
-        topic_tags = ?,
-        ai_processed = 1,
-        ai_processed_at = ?
-    WHERE id = ?
-    """, (
-        analysis["relevance_score"],
-        analysis["summary_tldr"],
-        json.dumps(analysis["key_takeaways"], ensure_ascii=False),
-        analysis["curator_note"],
-        json.dumps(analysis["topic_tags"], ensure_ascii=False),
-        datetime.utcnow().isoformat(),
-        item_id
-    ))
-    conn.commit()
-    conn.close()
+
+    save_item_analysis(item_id, analysis)
     return analysis
 
 def process_all_pending_items(limit: int = 20):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM items WHERE ai_processed = 0 ORDER BY published_at DESC LIMIT ?", (limit,))
-    rows = cursor.fetchall()
-    conn.close()
-    
+    from app.storage import get_pending_item_ids
+
+    pending_ids = get_pending_item_ids(limit)
     processed = 0
-    for r in rows:
-        process_item_ai(r["id"])
+    for item_id in pending_ids:
+        process_item_ai(item_id)
         processed += 1
     return processed
