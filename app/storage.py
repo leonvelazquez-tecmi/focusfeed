@@ -1,5 +1,7 @@
 import json
 import os
+import urllib.request
+import urllib.parse
 from datetime import datetime
 from app.db import (
     is_supabase, supabase_request, 
@@ -25,13 +27,16 @@ def fetch_items(tab="curated", type_filter="all", limit=50):
             
         query += f"&limit={limit}"
         items = supabase_request(query)
+        if not isinstance(items, list):
+            items = []
         
         # Calculate counts
         all_status = supabase_request("items?select=status")
         counts = {}
-        for r in all_status:
-            s = r.get("status", "inbox")
-            counts[s] = counts.get(s, 0) + 1
+        if isinstance(all_status, list):
+            for r in all_status:
+                s = r.get("status", "inbox")
+                counts[s] = counts.get(s, 0) + 1
             
         return {"items": items, "counts": counts}
     else:
@@ -89,6 +94,8 @@ def save_user_feedback(item_id: int, rating: str, comment: str = ""):
 def fetch_feeds():
     if is_supabase():
         feeds = supabase_request("feeds?select=*&order=created_at.desc")
+        if not isinstance(feeds, list):
+            feeds = []
         for f in feeds:
             f["item_count"] = 0
         return feeds
@@ -117,7 +124,7 @@ def create_or_update_feed(title: str, feed_url: str, feed_type: str = "youtube",
             "is_active": True
         }
         res = supabase_request("feeds", method="POST", data=data, headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
-        return res[0]["id"] if res else 1
+        return res[0]["id"] if (res and isinstance(res, list) and len(res) > 0) else 1
     else:
         from app.ingestion import register_feed
         return register_feed(title, feed_url, feed_type, category, site_url)
@@ -145,7 +152,7 @@ def fetch_profile():
     ]
     if is_supabase():
         res = supabase_request("user_profile?select=*&limit=1")
-        if res:
+        if res and isinstance(res, list) and len(res) > 0:
             p = res[0]
             try:
                 topics = json.loads(p.get("focus_topics")) if isinstance(p.get("focus_topics"), str) else p.get("focus_topics")
@@ -188,23 +195,37 @@ def batch_save_items(items: list):
         inserted = 0
         for item in items:
             data = {
-                "feed_id": item["feed_id"],
+                "feed_id": item.get("feed_id", 1),
                 "guid": item["guid"],
                 "title": item["title"],
                 "url": item["url"],
                 "author": item.get("author", ""),
-                "published_at": item.get("published_at"),
+                "published_at": item.get("published_at", datetime.utcnow().isoformat()),
                 "content_type": item.get("content_type", "video"),
                 "video_id": item.get("video_id"),
                 "thumbnail_url": item.get("thumbnail_url", ""),
-                "raw_content": item.get("raw_content", ""),
-                "transcript": item.get("transcript", ""),
+                "raw_content": item.get("raw_content", "")[:2000],
+                "transcript": item.get("transcript", "")[:2000],
+                "relevance_score": item.get("relevance_score", 75),
+                "summary_tldr": item.get("summary_tldr", ""),
+                "key_takeaways": item.get("key_takeaways", "[]"),
+                "curator_note": item.get("curator_note", ""),
+                "topic_tags": item.get("topic_tags", "[]"),
                 "status": "inbox"
             }
             res = supabase_request("items", method="POST", data=data, headers_extra={"Prefer": "resolution=ignore-duplicates,return=representation"})
-            if res:
+            if res and isinstance(res, list):
                 inserted += len(res)
         return inserted
     else:
         from app.ingestion import save_items_to_db
         return save_items_to_db(items)
+
+def ensure_seed_if_empty():
+    """Seeds initial feeds and items in Supabase if empty."""
+    feeds = fetch_feeds()
+    if not feeds:
+        create_or_update_feed("Andrej Karpathy", "https://www.youtube.com/feeds/videos.xml?channel_id=UCXUPKJOtpqmgUOxw8p9n6Tw", "youtube", "IA & Agentes")
+        create_or_update_feed("Tiago Forte", "https://www.youtube.com/feeds/videos.xml?channel_id=UCBw92y4tWvjB0U_N9l3l7-w", "youtube", "PKM & Obsidian")
+        create_or_update_feed("New York Journal of Philosophy", "https://journalofphilosophy.substack.com/feed", "substack", "Filosofía")
+        create_or_update_feed("StudioBinder", "https://www.youtube.com/feeds/videos.xml?channel_id=UCQ4v9aB3X59bF3Jb7M6T-aA", "youtube", "Cine")
