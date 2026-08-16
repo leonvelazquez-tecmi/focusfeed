@@ -147,8 +147,12 @@ def save_item_analysis(item_id: int, analysis: dict):
         "ai_processed_at": now_iso
     }
     if is_supabase():
-        data["ai_processed"] = True
-        return supabase_request(f"items?id=eq.{item_id}", method="PATCH", data=data)
+        data["ai_processed"] = 1
+        res = supabase_request(f"items?id=eq.{item_id}", method="PATCH", data=data)
+        if not isinstance(res, list):
+            err_msg = res.get("message") if isinstance(res, dict) else str(res)
+            raise RuntimeError(f"Supabase rechazó el análisis del item {item_id}: {err_msg}")
+        return res
     else:
         conn = get_db_connection()
         cursor = conn.cursor()
