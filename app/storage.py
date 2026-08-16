@@ -108,21 +108,55 @@ def fetch_feeds():
         conn.close()
         return feeds
 
-def create_or_update_feed(title: str, feed_url: str, feed_type: str = "youtube", category: str = "General", site_url: str = ""):
+def batch_create_feeds(feeds_list: list):
+    """
+    Inserts a batch of feeds into Supabase or SQLite in ONE single operation.
+    """
+    if not feeds_list:
+        return 0
+        
     if is_supabase():
-        data = {
-            "title": title,
-            "feed_url": feed_url,
-            "site_url": site_url,
-            "feed_type": feed_type,
-            "custom_category": category or "General",
-            "is_active": True
-        }
-        res = supabase_request("feeds?on_conflict=feed_url", method="POST", data=data, headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
-        return res[0]["id"] if (res and isinstance(res, list) and len(res) > 0) else 1
+        clean_batch = []
+        for f in feeds_list:
+            clean_batch.append({
+                "title": f["title"],
+                "feed_url": f["feed_url"],
+                "site_url": f.get("site_url", ""),
+                "feed_type": f.get("feed_type", "rss"),
+                "channel_id": f.get("channel_id"),
+                "custom_category": f.get("custom_category", "General"),
+                "is_active": True
+            })
+        res = supabase_request("feeds?on_conflict=feed_url", method="POST", data=clean_batch, headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
+        if res and isinstance(res, list):
+            return len(res)
+        return len(clean_batch)
     else:
-        from app.ingestion import register_feed
-        return register_feed(title, feed_url, feed_type, category, site_url)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        inserted = 0
+        for f in feeds_list:
+            try:
+                cursor.execute("""
+                INSERT INTO feeds (title, feed_url, site_url, feed_type, channel_id, custom_category)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(feed_url) DO UPDATE SET title=excluded.title, custom_category=excluded.custom_category
+                """, (f["title"], f["feed_url"], f.get("site_url", ""), f.get("feed_type", "rss"), f.get("channel_id"), f.get("custom_category", "General")))
+                inserted += 1
+            except Exception:
+                continue
+        conn.commit()
+        conn.close()
+        return inserted
+
+def create_or_update_feed(title: str, feed_url: str, feed_type: str = "youtube", category: str = "General", site_url: str = ""):
+    return batch_create_feeds([{
+        "title": title,
+        "feed_url": feed_url,
+        "feed_type": feed_type,
+        "custom_category": category,
+        "site_url": site_url
+    }])
 
 def remove_feed(feed_id: int):
     if is_supabase():
@@ -220,7 +254,9 @@ def batch_save_items(items: list):
 def ensure_seed_if_empty():
     feeds = fetch_feeds()
     if not feeds:
-        create_or_update_feed("Andrej Karpathy", "https://www.youtube.com/feeds/videos.xml?channel_id=UCXUPKJOtpqmgUOxw8p9n6Tw", "youtube", "IA & Agentes")
-        create_or_update_feed("Tiago Forte", "https://www.youtube.com/feeds/videos.xml?channel_id=UCBw92y4tWvjB0U_N9l3l7-w", "youtube", "PKM & Obsidian")
-        create_or_update_feed("New York Journal of Philosophy", "https://journalofphilosophy.substack.com/feed", "substack", "Filosofía")
-        create_or_update_feed("StudioBinder", "https://www.youtube.com/feeds/videos.xml?channel_id=UCQ4v9aB3X59bF3Jb7M6T-aA", "youtube", "Cine")
+        batch_create_feeds([
+            {"title": "Andrej Karpathy", "feed_url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCXUPKJOtpqmgUOxw8p9n6Tw", "feed_type": "youtube", "custom_category": "IA & Agentes"},
+            {"title": "Tiago Forte", "feed_url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCBw92y4tWvjB0U_N9l3l7-w", "feed_type": "youtube", "custom_category": "PKM & Obsidian"},
+            {"title": "New York Journal of Philosophy", "feed_url": "https://journalofphilosophy.substack.com/feed", "feed_type": "substack", "custom_category": "Filosofía"},
+            {"title": "StudioBinder", "feed_url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCQ4v9aB3X59bF3Jb7M6T-aA", "feed_type": "youtube", "custom_category": "Cine"}
+        ])

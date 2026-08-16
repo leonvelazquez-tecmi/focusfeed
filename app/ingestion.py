@@ -2,9 +2,13 @@ import xml.etree.ElementTree as ET
 import urllib.request
 import re
 import json
+import warnings
 from datetime import datetime
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 from app.db import get_db_connection
 from app.extractors import clean_html_article
+
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 NAMESPACES = {
     'atom': 'http://www.w3.org/2005/Atom',
@@ -16,7 +20,9 @@ NAMESPACES = {
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cookie": "SOCS=CAESEwgDEgk2ODEwNTk0OTQaAmVuIAEaBgiA_LyaBg"
 }
 
 def resolve_feed_url(raw_url: str) -> tuple[str, str, str]:
@@ -24,28 +30,56 @@ def resolve_feed_url(raw_url: str) -> tuple[str, str, str]:
     feed_type = "rss"
     suggested_title = ""
 
-    if "youtube.com" in raw_url or "youtu.be" in raw_url:
+    # YouTube URL handling
+    if "youtube.com" in raw_url or "youtu.be" in raw_url or raw_url.startswith("@"):
         feed_type = "youtube"
+        
+        # Already an RSS feed URL
         if "feeds/videos.xml" in raw_url:
             return raw_url, feed_type, suggested_title
             
-        if "channel/" in raw_url:
-            ch_id = raw_url.split("channel/")[1].split("/")[0].split("?")[0]
+        # Already has /channel/UC...
+        if "/channel/UC" in raw_url:
+            ch_id = raw_url.split("/channel/")[1].split("/")[0].split("?")[0]
             return f"https://www.youtube.com/feeds/videos.xml?channel_id={ch_id}", feed_type, suggested_title
             
+        # Handle @handle or full URL
+        target_url = raw_url
+        if raw_url.startswith("@"):
+            target_url = f"https://www.youtube.com/{raw_url}"
+            
+        clean_url = target_url.rstrip("/")
+        fetch_url = clean_url + "/videos" if not clean_url.endswith("/videos") else clean_url
+        
         try:
-            req = urllib.request.Request(raw_url, headers=HEADERS)
+            req = urllib.request.Request(fetch_url, headers=HEADERS)
             with urllib.request.urlopen(req, timeout=5) as resp:
                 html = resp.read().decode('utf-8', errors='ignore')
-                rss_match = re.search(r'href="(https://www\.youtube\.com/feeds/videos\.xml\?channel_id=[a-zA-Z0-9_-]+)"', html)
-                if rss_match:
-                    return rss_match.group(1), feed_type, suggested_title
-                cid_match = re.search(r'"channelId":"([a-zA-Z0-9_-]+)"', html)
-                if cid_match:
-                    return f"https://www.youtube.com/feeds/videos.xml?channel_id={cid_match.group(1)}", feed_type, suggested_title
+                
+                # Check for channel name / title
+                title_match = re.search(r'<meta property="og:title" content="([^"]+)"', html)
+                if title_match:
+                    suggested_title = title_match.group(1)
+                    
+                # Search for channelId in various YouTube script formats
+                patterns = [
+                    r'"browseId":"(UC[a-zA-Z0-9_-]{20,24})"',
+                    r'"externalId":"(UC[a-zA-Z0-9_-]{20,24})"',
+                    r'"channelId":"(UC[a-zA-Z0-9_-]{20,24})"',
+                    r'href="(https://www\.youtube\.com/feeds/videos\.xml\?channel_id=[a-zA-Z0-9_-]+)"',
+                    r'channel_id=(UC[a-zA-Z0-9_-]{20,24})'
+                ]
+                for pat in patterns:
+                    m = re.search(pat, html)
+                    if m:
+                        cid = m.group(1)
+                        if cid.startswith("https://"):
+                            return cid, feed_type, suggested_title
+                        return f"https://www.youtube.com/feeds/videos.xml?channel_id={cid}", feed_type, suggested_title
         except Exception:
             pass
 
+    # Substack URL
     if "substack.com" in raw_url:
         feed_type = "substack"
         if not raw_url.endswith("/feed"):
@@ -55,8 +89,13 @@ def resolve_feed_url(raw_url: str) -> tuple[str, str, str]:
     return raw_url, feed_type, suggested_title
 
 def parse_youtube_feed_xml(xml_text: str, feed_id: int):
-    root = ET.fromstring(xml_text)
     items = []
+    try:
+        root = ET.fromstring(xml_text)
+    except Exception:
+        # If not valid XML, abort gracefully
+        return []
+
     entries = root.findall('atom:entry', NAMESPACES) or root.findall('{http://www.w3.org/2005/Atom}entry') or root.findall('.//entry')
 
     for entry in entries:
@@ -114,8 +153,11 @@ def parse_youtube_feed_xml(xml_text: str, feed_id: int):
     return items
 
 def parse_rss_feed_xml(xml_text: str, feed_id: int):
-    root = ET.fromstring(xml_text)
     items = []
+    try:
+        root = ET.fromstring(xml_text)
+    except Exception:
+        return []
     
     if root.tag.endswith('feed'):
         entries = root.findall('atom:entry', NAMESPACES) or root.findall('.//entry')
@@ -202,37 +244,46 @@ def parse_rss_feed_xml(xml_text: str, feed_id: int):
     return items
 
 def parse_opml(opml_content: str):
-    root = ET.fromstring(opml_content)
     feeds = []
-    
-    outlines = root.findall('.//outline')
-    for outline in outlines:
-        xml_url = outline.get('xmlUrl') or outline.get('xmlurl')
-        html_url = outline.get('htmlUrl') or outline.get('htmlurl')
-        title = outline.get('title') or outline.get('text') or "Feed"
-        category = outline.get('category') or "General"
-        
-        # Check parent outline for category if any
-        if xml_url:
-            feed_type = 'rss'
-            channel_id = None
-            if 'youtube.com' in xml_url or 'channel_id=' in xml_url:
-                feed_type = 'youtube'
-                match = re.search(r'channel_id=([a-zA-Z0-9_-]+)', xml_url)
-                if match:
-                    channel_id = match.group(1)
-            elif 'substack.com' in xml_url:
-                feed_type = 'substack'
-                
-            feeds.append({
-                "title": title,
-                "feed_url": xml_url,
-                "site_url": html_url or "",
-                "feed_type": feed_type,
-                "channel_id": channel_id,
-                "custom_category": category
-            })
+    try:
+        soup = BeautifulSoup(opml_content, 'html.parser')
+        outlines = soup.find_all('outline')
+        for outline in outlines:
+            xml_url = outline.get('xmlurl') or outline.get('xmlUrl')
+            html_url = outline.get('htmlurl') or outline.get('htmlUrl')
+            title = outline.get('title') or outline.get('text') or "Feed"
             
+            category = "General"
+            parent = outline.parent
+            if parent and parent.name == 'outline':
+                category = parent.get('title') or parent.get('text') or "General"
+            elif outline.get('category'):
+                category = outline.get('category')
+                
+            if xml_url:
+                feed_type = 'rss'
+                channel_id = None
+                if 'youtube.com' in xml_url or 'channel_id=' in xml_url or 'gdata.youtube.com' in xml_url:
+                    feed_type = 'youtube'
+                    match = re.search(r'channel_id=([a-zA-Z0-9_-]+)', xml_url)
+                    if match:
+                        channel_id = match.group(1)
+                elif 'substack.com' in xml_url:
+                    feed_type = 'substack'
+                    
+                feeds.append({
+                    "title": title.strip(),
+                    "feed_url": xml_url.strip(),
+                    "site_url": (html_url or "").strip(),
+                    "feed_type": feed_type,
+                    "channel_id": channel_id,
+                    "custom_category": category.strip()
+                })
+        if feeds:
+            return feeds
+    except Exception:
+        pass
+        
     return feeds
 
 def register_feed(title: str, feed_url: str, feed_type: str = "youtube", category: str = "General", site_url: str = ""):
