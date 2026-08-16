@@ -222,3 +222,12 @@ def batch_save_items(items: list):
     else:
         from app.ingestion import save_items_to_db
         return save_items_to_db(items)
+
+def ensure_seed_if_empty():
+    """Seeds initial feeds if empty."""
+    feeds = fetch_feeds()
+    if not feeds:
+        create_or_update_feed("Andrej Karpathy", "https://www.youtube.com/feeds/videos.xml?channel_id=UCXUPKJOtpqmgUOxw8p9n6Tw", "youtube", "IA & Agentes")
+        create_or_update_feed("Tiago Forte", "https://www.youtube.com/feeds/videos.xml?channel_id=UCBw92y4tWvjB0U_N9l3l7-w", "youtube", "PKM & Obsidian")
+        create_or_update_feed("New York Journal of Philosophy", "https://journalofphilosophy.substack.com/feed", "substack", "Filosofía")
+        create_or_update_feed("StudioBinder", "https://www.youtube.com/feeds/videos.xml?channel_id=UCQ4v9aB3X59bF3Jb7M6T-aA", "youtube", "Cine")
