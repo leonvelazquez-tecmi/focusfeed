@@ -62,13 +62,13 @@
           <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         </div>
         <div>
-          <h1 class="text-lg font-extrabold tracking-tight text-slate-900">FocusFeed</h1>
+          <h1 class="text-xl font-extrabold tracking-tight text-slate-900">FocusFeed</h1>
         </div>
       </div>
 
       <!-- Actions -->
       <div class="flex items-center space-x-2">
-        <button onclick="syncAllBatches()" id="sync-btn" title="Sincronizar feeds" class="px-2.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center gap-1 text-slate-700 border border-slate-200 text-sm font-semibold transition whitespace-nowrap">
+        <button onclick="syncAllBatches()" id="sync-btn" title="Sincronizar feeds" class="px-2.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center gap-1 text-slate-700 border border-slate-200 text-lg font-semibold transition whitespace-nowrap">
           <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           <span class="hidden sm:inline">Sincronizar</span>
         </button>
@@ -82,7 +82,7 @@
   <!-- Filter & Segment Tabs -->
   <section id="filter-section" class="sticky top-[53px] z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-2">
     <div class="max-w-2xl mx-auto flex items-center justify-between gap-2 overflow-x-auto custom-scrollbar">
-      <div class="flex items-center space-x-1.5 text-sm font-semibold shrink-0">
+      <div class="flex items-center space-x-1.5 text-lg font-semibold shrink-0">
         <button onclick="setTab('curated')" id="tab-curated" class="px-3.5 py-1.5 rounded-full bg-slate-900 text-white font-bold flex items-center gap-1.5 shadow-sm transition whitespace-nowrap">
           <span>✦</span> Para ti (IA)
         </button>
@@ -97,7 +97,7 @@
         </button>
       </div>
 
-      <select id="filter-type" onchange="loadItems()" class="bg-slate-100 text-slate-700 text-sm rounded-full px-2.5 py-1.5 border border-slate-200 outline-none shrink-0 font-medium">
+      <select id="filter-type" onchange="loadItems()" class="bg-slate-100 text-slate-700 text-lg rounded-full px-2.5 py-1.5 border border-slate-200 outline-none shrink-0 font-medium">
         <option value="all">Todo tipo</option>
         <option value="video">Videos</option>
         <option value="article">Artículos</option>
@@ -108,7 +108,7 @@
   <!-- Main Container -->
   <main class="flex-1 max-w-2xl w-full mx-auto px-4 py-4 space-y-4">
     <!-- Progress banner during syncing -->
-    <div id="sync-progress-banner" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-3 text-xs text-blue-900 flex items-center justify-between shadow-sm">
+    <div id="sync-progress-banner" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-3 text-base text-blue-900 flex items-center justify-between shadow-sm">
       <div class="flex items-center space-x-2">
         <span class="animate-spin text-blue-600 font-bold">↻</span>
         <span id="sync-progress-text">Sincronizando canales...</span>
@@ -117,22 +117,22 @@
     </div>
 
     <!-- Active Topics Header -->
-    <div id="topics-banner" class="bg-white border border-blue-100 rounded-2xl p-3.5 flex items-center justify-between text-sm shadow-sm">
+    <div id="topics-banner" class="bg-white border border-blue-100 rounded-2xl p-3.5 flex items-center justify-between text-lg shadow-sm">
       <div class="flex items-center space-x-2.5">
-        <span class="text-blue-600 text-lg">🧠</span>
+        <span class="text-blue-600 text-xl">🧠</span>
         <div>
           <span class="font-bold text-slate-900">Curación con Aprendizaje Activo</span>
-          <span id="learning-summary" class="text-slate-500 text-xs block">Ponderando según tus calificaciones con ❤️ o 👎.</span>
+          <span id="learning-summary" class="text-slate-500 text-base block">Ponderando según tus calificaciones con ❤️ o 👎.</span>
         </div>
       </div>
-      <button onclick="openModal('modal-learned')" class="text-blue-600 hover:text-blue-700 font-semibold text-xs shrink-0 ml-2 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 whitespace-nowrap">
+      <button onclick="openModal('modal-learned')" class="text-blue-600 hover:text-blue-700 font-semibold text-base shrink-0 ml-2 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 whitespace-nowrap">
         Ver perfil
       </button>
     </div>
 
     <!-- Feed Items Container -->
     <div id="items-list" class="space-y-4">
-      <div class="text-center py-16 text-slate-400 text-xs">Cargando contenido...</div>
+      <div class="text-center py-16 text-slate-400 text-base">Cargando contenido...</div>
     </div>
 
     <!-- Sources / Canales View Container -->
@@ -143,7 +143,7 @@
 
   <!-- Bottom Navigation Bar -->
   <footer class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-2xl border-t border-slate-200 bottom-nav-safe shadow-lg">
-    <div class="max-w-2xl mx-auto flex items-center justify-around py-2 text-xs font-semibold text-slate-500">
+    <div class="max-w-2xl mx-auto flex items-center justify-around py-2 text-base font-semibold text-slate-500">
       <button onclick="setTab('curated')" id="bnav-curated" class="flex flex-col items-center gap-1 text-blue-600">
         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
         <span>Para ti</span>
@@ -167,7 +167,7 @@
   <div id="modal-feedback" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-white border border-slate-200 rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
           <span>⭐</span> Calificar y Entrenar Curador IA
         </h3>
         <button onclick="closeModal('modal-feedback')" class="p-1 text-slate-400 hover:text-slate-600">
@@ -175,31 +175,31 @@
         </button>
       </div>
 
-      <div class="space-y-3 text-xs">
+      <div class="space-y-3 text-base">
         <div>
-          <p id="feedback-item-title" class="font-bold text-slate-800 text-xs line-clamp-1 mb-2">Título</p>
+          <p id="feedback-item-title" class="font-bold text-slate-800 text-base line-clamp-1 mb-2">Título</p>
           <div class="flex items-center justify-around bg-slate-50 p-2.5 rounded-xl border border-slate-200">
             <button onclick="selectQuickRating('love')" id="rate-btn-love" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
-              <span class="text-xl">❤️</span>
-              <span class="text-[10px] font-semibold text-slate-700">Me encanta</span>
+              <span class="text-2xl">❤️</span>
+              <span class="text-sm font-semibold text-slate-700">Me encanta</span>
             </button>
             <button onclick="selectQuickRating('like')" id="rate-btn-like" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
-              <span class="text-xl">👍</span>
-              <span class="text-[10px] font-semibold text-slate-700">Relevante</span>
+              <span class="text-2xl">👍</span>
+              <span class="text-sm font-semibold text-slate-700">Relevante</span>
             </button>
             <button onclick="selectQuickRating('dislike')" id="rate-btn-dislike" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
-              <span class="text-xl">👎</span>
-              <span class="text-[10px] font-semibold text-slate-700">No relevante</span>
+              <span class="text-2xl">👎</span>
+              <span class="text-sm font-semibold text-slate-700">No relevante</span>
             </button>
           </div>
         </div>
 
         <div>
           <label class="font-semibold text-slate-700 block mb-1">Comentario o Instrucción para la IA:</label>
-          <textarea id="feedback-comment" rows="3" placeholder="Ej: Me interesan más análisis técnicos, menos noticias del día..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 text-xs outline-none focus:border-blue-500 focus:bg-white"></textarea>
+          <textarea id="feedback-comment" rows="3" placeholder="Ej: Me interesan más análisis técnicos, menos noticias del día..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 text-base outline-none focus:border-blue-500 focus:bg-white"></textarea>
         </div>
 
-        <button onclick="submitItemFeedback()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-md shadow-blue-500/20">
+        <button onclick="submitItemFeedback()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-base shadow-md shadow-blue-500/20">
           Guardar y Calibrar IA
         </button>
       </div>
@@ -210,7 +210,7 @@
   <div id="modal-add" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div class="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
           <span>➕</span> Agregar Suscripciones
         </h3>
         <button onclick="closeModal('modal-add')" class="p-1 text-slate-400 hover:text-slate-600">
@@ -218,19 +218,19 @@
         </button>
       </div>
 
-      <div class="space-y-3 text-xs">
+      <div class="space-y-3 text-base">
         <div>
           <label class="text-slate-700 font-semibold block mb-1">Pega el link de un canal de YouTube, Blog o Substack:</label>
-          <input type="text" id="feed-url-input" placeholder="https://www.youtube.com/@TheVerge o RSS" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 text-xs outline-none focus:border-blue-500 focus:bg-white">
+          <input type="text" id="feed-url-input" placeholder="https://www.youtube.com/@TheVerge o RSS" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 text-base outline-none focus:border-blue-500 focus:bg-white">
         </div>
-        <button onclick="addSingleFeed()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-sm">
+        <button onclick="addSingleFeed()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-base shadow-sm">
           + Agregar Canal
         </button>
 
         <div class="border-t border-slate-200 pt-3 space-y-2">
           <label class="text-slate-700 font-semibold block">O pega tu archivo OPML (Feedly / YouTube):</label>
-          <textarea id="opml-input" rows="4" placeholder="<opml version='1.0'>...</textarea>" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-mono text-[10px] text-slate-800 outline-none focus:bg-white"></textarea>
-          <button onclick="importOpml()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-xl transition text-xs">
+          <textarea id="opml-input" rows="4" placeholder="<opml version='1.0'>...</textarea>" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-mono text-sm text-slate-800 outline-none focus:bg-white"></textarea>
+          <button onclick="importOpml()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-xl transition text-base">
             Importar todas las suscripciones
           </button>
         </div>
@@ -242,7 +242,7 @@
   <div id="modal-learned" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div class="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar">
       <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
           <span>🧠</span> Preferencias Aprendidas por la IA
         </h3>
         <button onclick="closeModal('modal-learned')" class="p-1 text-slate-400 hover:text-slate-600">
@@ -250,8 +250,8 @@
         </button>
       </div>
 
-      <div class="space-y-4 text-xs">
-        <div id="db-status-pill" class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 font-mono">
+      <div class="space-y-4 text-base">
+        <div id="db-status-pill" class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600 font-mono">
           Verificando estado de Supabase...
         </div>
 
@@ -260,19 +260,19 @@
         </p>
 
         <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-          <h4 class="font-bold text-emerald-700 text-xs">🏆 Canales con Boost Positivo</h4>
-          <div id="learned-authors-list" class="flex flex-wrap gap-1.5 text-[11px]"></div>
+          <h4 class="font-bold text-emerald-700 text-base">🏆 Canales con Boost Positivo</h4>
+          <div id="learned-authors-list" class="flex flex-wrap gap-1.5 text-sm"></div>
         </div>
 
         <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-          <h4 class="font-bold text-blue-700 text-xs">🎯 Temas con Mayor Afinidad</h4>
-          <div id="learned-tags-list" class="flex flex-wrap gap-1.5 text-[11px]"></div>
+          <h4 class="font-bold text-blue-700 text-base">🎯 Temas con Mayor Afinidad</h4>
+          <div id="learned-tags-list" class="flex flex-wrap gap-1.5 text-sm"></div>
         </div>
 
         <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-          <h4 class="font-bold text-slate-800 text-xs">📝 Temas Base de Enfoque</h4>
-          <textarea id="edit-focus-topics" rows="4" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 text-xs outline-none focus:border-blue-500"></textarea>
-          <button onclick="saveTopicsFromModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-xl text-xs">
+          <h4 class="font-bold text-slate-800 text-base">📝 Temas Base de Enfoque</h4>
+          <textarea id="edit-focus-topics" rows="4" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 text-base outline-none focus:border-blue-500"></textarea>
+          <button onclick="saveTopicsFromModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-xl text-base">
             Actualizar Temas
           </button>
         </div>
@@ -281,7 +281,7 @@
   </div>
 
   <!-- Toast -->
-  <div id="toast" class="fixed top-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-full shadow-2xl transform -translate-y-16 opacity-0 transition duration-200 flex items-center gap-2">
+  <div id="toast" class="fixed top-5 right-5 z-50 bg-slate-900 text-white text-base px-4 py-2.5 rounded-full shadow-2xl transform -translate-y-16 opacity-0 transition duration-200 flex items-center gap-2">
     <span id="toast-icon">✓</span>
     <span id="toast-msg">Mensaje</span>
   </div>
@@ -352,7 +352,7 @@
     async function loadItems() {
       const typeFilter = document.getElementById('filter-type').value;
       const listEl = document.getElementById('items-list');
-      listEl.innerHTML = '<div class="text-center py-16 text-slate-400 text-xs">Cargando tu feed curado...</div>';
+      listEl.innerHTML = '<div class="text-center py-16 text-slate-400 text-base">Cargando tu feed curado...</div>';
 
       try {
         const res = await fetch(`/api/items?tab=${currentTab}&type=${typeFilter}`);
@@ -369,7 +369,7 @@
           triggerPendingEnrichment();
         }
       } catch (err) {
-        listEl.innerHTML = `<div class="text-center py-8 text-red-500 text-xs">Error: ${err.message}</div>`;
+        listEl.innerHTML = `<div class="text-center py-8 text-red-500 text-base">Error: ${err.message}</div>`;
       }
     }
 
@@ -410,9 +410,9 @@
         sourcesEl.innerHTML = `
           <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6 space-y-3 shadow-sm">
             <div class="text-3xl">📡</div>
-            <h3 class="text-sm font-bold text-slate-900">No hay canales registrados</h3>
-            <p class="text-xs text-slate-500 max-w-sm mx-auto">Pega tu archivo OPML de Feedly o la URL de un canal con el botón (+).</p>
-            <button onclick="openModal('modal-add')" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-md shadow-blue-500/20">
+            <h3 class="text-lg font-bold text-slate-900">No hay canales registrados</h3>
+            <p class="text-base text-slate-500 max-w-sm mx-auto">Pega tu archivo OPML de Feedly o la URL de un canal con el botón (+).</p>
+            <button onclick="openModal('modal-add')" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-base font-bold shadow-md shadow-blue-500/20">
               + Agregar Canales
             </button>
           </div>
@@ -430,10 +430,10 @@
       let html = `
         <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <h2 class="text-sm font-bold text-slate-900">Tus ${cachedFeeds.length} Canales y Fuentes</h2>
-            <p class="text-xs text-slate-500">Guardados en tu base de datos permanente en Supabase</p>
+            <h2 class="text-lg font-bold text-slate-900">Tus ${cachedFeeds.length} Canales y Fuentes</h2>
+            <p class="text-base text-slate-500">Guardados en tu base de datos permanente en Supabase</p>
           </div>
-          <button onclick="syncAllBatches()" class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-sm">
+          <button onclick="syncAllBatches()" class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-base font-bold transition shadow-sm">
             ⚡ Sincronizar todos
           </button>
         </div>
@@ -443,28 +443,28 @@
         html += `
           <div class="space-y-2">
             <div class="flex items-center justify-between px-1">
-              <h3 class="text-xs font-bold text-blue-600 uppercase tracking-wider">${catName}</h3>
-              <span class="text-[11px] font-semibold text-slate-400">${fList.length} fuentes</span>
+              <h3 class="text-base font-bold text-blue-600 uppercase tracking-wider">${catName}</h3>
+              <span class="text-sm font-semibold text-slate-400">${fList.length} fuentes</span>
             </div>
             <div class="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 shadow-sm overflow-hidden">
               ${fList.map(f => {
                 const isYt = f.feed_type === 'youtube';
                 const icon = isYt ? '🎬' : (f.feed_type === 'substack' ? '💌' : '📄');
                 return `
-                  <div class="p-3.5 flex items-center justify-between hover:bg-slate-50/80 transition text-xs">
+                  <div class="p-3.5 flex items-center justify-between hover:bg-slate-50/80 transition text-base">
                     <div class="flex items-center space-x-2.5 overflow-hidden">
-                      <span class="text-base shrink-0">${icon}</span>
+                      <span class="text-lg shrink-0">${icon}</span>
                       <div class="truncate">
                         <div class="font-bold text-slate-900 truncate">${f.title}</div>
-                        <div class="text-[10px] text-slate-400 truncate max-w-xs">${f.feed_url}</div>
+                        <div class="text-sm text-slate-400 truncate max-w-xs">${f.feed_url}</div>
                       </div>
                     </div>
 
                     <div class="flex items-center space-x-1.5 shrink-0 ml-2">
-                      <button onclick="syncSingleFeed(${f.id}, '${f.feed_url}', '${f.feed_type}')" title="Cargar artículos de este canal" class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium">
+                      <button onclick="syncSingleFeed(${f.id}, '${f.feed_url}', '${f.feed_type}')" title="Cargar artículos de este canal" class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-base font-medium">
                         ↻
                       </button>
-                      <button onclick="deleteFeed(${f.id})" title="Eliminar canal" class="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 text-xs">
+                      <button onclick="deleteFeed(${f.id})" title="Eliminar canal" class="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 text-base">
                         ✕
                       </button>
                     </div>
@@ -500,9 +500,9 @@
         listEl.innerHTML = `
           <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6 space-y-3 shadow-sm">
             <div class="text-3xl">🌿</div>
-            <h3 class="text-sm font-bold text-slate-900">Todo al día en este feed</h3>
-            <p class="text-xs text-slate-500 max-w-sm mx-auto">Tienes ${cachedFeeds.length} canales en Supabase. Haz clic abajo para descargar los artículos más recientes.</p>
-            <button onclick="syncAllBatches()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-md shadow-blue-500/20">
+            <h3 class="text-lg font-bold text-slate-900">Todo al día en este feed</h3>
+            <p class="text-base text-slate-500 max-w-sm mx-auto">Tienes ${cachedFeeds.length} canales en Supabase. Haz clic abajo para descargar los artículos más recientes.</p>
+            <button onclick="syncAllBatches()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-base font-bold transition shadow-md shadow-blue-500/20">
               ⚡ Sincronizar Feed Ahora
             </button>
           </div>
@@ -516,9 +516,9 @@
         const takeaways = item.key_takeaways ? (typeof item.key_takeaways === 'string' ? JSON.parse(item.key_takeaways) : item.key_takeaways) : [];
         const source = resolveSource(item);
 
-        let matchBadge = `<span class="text-xs font-bold text-blue-600 flex items-center gap-1 whitespace-nowrap">✦ ${score}% Match</span>`;
+        let matchBadge = `<span class="text-base font-bold text-blue-600 flex items-center gap-1 whitespace-nowrap">✦ ${score}% Match</span>`;
         if (score >= 90) {
-          matchBadge = `<span class="text-xs font-bold text-emerald-600 flex items-center gap-1 whitespace-nowrap">✦ ${score}% Top Match</span>`;
+          matchBadge = `<span class="text-base font-bold text-emerald-600 flex items-center gap-1 whitespace-nowrap">✦ ${score}% Top Match</span>`;
         }
 
         if (isVideo) {
@@ -526,63 +526,63 @@
             <article class="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden transition shadow-sm hover:shadow-md space-y-3 pb-3.5">
               <a href="${item.url}" target="_blank" class="block relative aspect-video bg-slate-950 group">
                 <img src="${item.thumbnail_url || 'https://i.ytimg.com/vi/' + item.video_id + '/hqdefault.jpg'}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
-                <div class="absolute bottom-2.5 right-2.5 bg-black/80 px-2 py-0.5 rounded-md text-[10px] font-bold text-white tracking-wide">
+                <div class="absolute bottom-2.5 right-2.5 bg-black/80 px-2 py-0.5 rounded-md text-sm font-bold text-white tracking-wide">
                   ▶ YouTube
                 </div>
               </a>
 
               <div class="px-4 space-y-2">
-                <div class="flex items-center justify-between text-sm gap-2">
+                <div class="flex items-center justify-between text-lg gap-2">
                   <div class="flex items-center gap-1.5 min-w-0">
-                    <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
+                    <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-base font-semibold">
                       ${source.platform.icon} ${source.platform.label}
                     </span>
-                    <span class="font-bold text-slate-800 text-sm truncate">${source.displayName}</span>
+                    <span class="font-bold text-slate-800 text-lg truncate">${source.displayName}</span>
                   </div>
                   <div>${matchBadge}</div>
                 </div>
 
-                <h2 class="text-lg font-bold text-slate-900 leading-snug">
+                <h2 class="text-xl font-bold text-slate-900 leading-snug">
                   <a href="${item.url}" target="_blank" class="hover:text-blue-600 transition">
                     ${item.title}
                   </a>
                 </h2>
 
                 ${item.curator_note ? `
-                  <p class="text-sm text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <p class="text-lg text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                     💡 <strong>Por qué verlo:</strong> ${item.curator_note}
                   </p>
                 ` : ''}
 
-                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-sm">
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-lg">
                   <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
-                    <div class="font-bold text-slate-800 flex items-center gap-1 text-sm">
+                    <div class="font-bold text-slate-800 flex items-center gap-1 text-lg">
                       <span class="text-blue-600">✦</span> Resumen y Puntos Clave
                     </div>
-                    <button id="toggle-btn-${item.id}" class="text-blue-600 font-bold text-sm">
+                    <button id="toggle-btn-${item.id}" class="text-blue-600 font-bold text-lg">
                       Desplegar ▾
                     </button>
                   </div>
 
                   <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-slate-200 space-y-2 text-slate-700 leading-relaxed">
-                    <p class="whitespace-pre-line text-sm">${item.summary_tldr || 'Resumen disponible.'}</p>
+                    <p class="whitespace-pre-line text-lg">${item.summary_tldr || 'Resumen disponible.'}</p>
                     ${takeaways.length > 0 ? `
-                      <ul class="space-y-1 text-sm text-slate-700 list-disc list-inside pt-1">
+                      <ul class="space-y-1 text-lg text-slate-700 list-disc list-inside pt-1">
                         ${takeaways.map(t => `<li>${t}</li>`).join('')}
                       </ul>
                     ` : ''}
                   </div>
                 </div>
 
-                <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-sm">
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-lg">
                   <div class="flex items-center space-x-1">
-                    <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition text-base">
+                    <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition text-lg">
                       ${item.user_rating === 'love' ? '❤️' : '🤍'}
                     </button>
-                    <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-base ${item.user_rating === 'dislike' ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-0'}">
+                    <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-lg ${item.user_rating === 'dislike' ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-0'}">
                       👎
                     </button>
-                    <button onclick="openFeedbackModal(${item.id})" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition whitespace-nowrap">
+                    <button onclick="openFeedbackModal(${item.id})" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-base font-semibold border border-slate-200 transition whitespace-nowrap">
                       💬 Calificar
                     </button>
                   </div>
@@ -602,61 +602,61 @@
         } else {
           return `
             <article class="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-4 sm:p-5 transition shadow-sm hover:shadow-md space-y-3">
-              <div class="flex items-center justify-between text-sm gap-2">
+              <div class="flex items-center justify-between text-lg gap-2">
                 <div class="flex items-center gap-1.5 min-w-0">
-                  <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
+                  <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-base font-semibold">
                     ${source.platform.icon} ${source.platform.label}
                   </span>
-                  <span class="font-bold text-slate-800 text-sm truncate">${source.displayName}</span>
+                  <span class="font-bold text-slate-800 text-lg truncate">${source.displayName}</span>
                 </div>
                 <div>${matchBadge}</div>
               </div>
 
               <div>
-                <h2 class="text-lg sm:text-xl font-bold text-slate-900 font-serif leading-snug">
+                <h2 class="text-xl sm:text-2xl font-bold text-slate-900 font-serif leading-snug">
                   <a href="${item.url}" target="_blank" class="hover:text-blue-600 transition">
                     ${item.title}
                   </a>
                 </h2>
-                <p class="text-sm text-slate-600 font-sans mt-1.5 line-clamp-2 leading-relaxed">
+                <p class="text-lg text-slate-600 font-sans mt-1.5 line-clamp-2 leading-relaxed">
                   ${item.summary_tldr || item.raw_content || ''}
                 </p>
               </div>
 
               ${item.curator_note ? `
-                <p class="text-sm text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                <p class="text-lg text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                   💡 <strong>Por qué leerlo:</strong> ${item.curator_note}
                 </p>
               ` : ''}
 
-              <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-sm">
+              <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-lg">
                 <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
-                  <div class="font-bold text-slate-800 flex items-center gap-1 text-sm">
+                  <div class="font-bold text-slate-800 flex items-center gap-1 text-lg">
                     <span class="text-blue-600">✦</span> Puntos Clave
                   </div>
-                  <button id="toggle-btn-${item.id}" class="text-blue-600 font-bold text-sm">
+                  <button id="toggle-btn-${item.id}" class="text-blue-600 font-bold text-lg">
                     Desplegar ▾
                   </button>
                 </div>
 
                 <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-slate-200 space-y-2 text-slate-700">
                   ${takeaways.length > 0 ? `
-                    <ul class="space-y-1 text-sm text-slate-700 list-disc list-inside">
+                    <ul class="space-y-1 text-lg text-slate-700 list-disc list-inside">
                       ${takeaways.map(t => `<li>${t}</li>`).join('')}
                     </ul>
                   ` : ''}
                 </div>
               </div>
 
-              <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-sm">
+              <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-lg">
                 <div class="flex items-center space-x-1">
-                  <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition text-base">
+                  <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition text-lg">
                     ${item.user_rating === 'love' ? '❤️' : '🤍'}
                   </button>
-                  <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-base ${item.user_rating === 'dislike' ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-0'}">
+                  <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-lg ${item.user_rating === 'dislike' ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-0'}">
                     👎
                   </button>
-                  <button onclick="openFeedbackModal(${item.id})" class="px-2 py-1 rounded bg-white text-slate-700 text-xs font-semibold border border-slate-200 whitespace-nowrap">
+                  <button onclick="openFeedbackModal(${item.id})" class="px-2 py-1 rounded bg-white text-slate-700 text-base font-semibold border border-slate-200 whitespace-nowrap">
                     💬 Calificar
                   </button>
                 </div>
