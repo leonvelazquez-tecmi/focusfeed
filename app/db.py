@@ -5,7 +5,6 @@ import urllib.request
 import urllib.parse
 from datetime import datetime
 
-# Check all possible naming conventions for Supabase env vars in Vercel
 SUPABASE_URL = (
     os.environ.get("SUPABASE_URL") or 
     os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or 
@@ -22,6 +21,8 @@ SUPABASE_KEY = (
 
 DB_PATH = os.environ.get("FEED_DB_PATH", "/tmp/feed_curator.db")
 
+LAST_SUPABASE_ERROR = None
+
 def is_supabase():
     return bool(SUPABASE_URL and SUPABASE_KEY)
 
@@ -29,13 +30,14 @@ def get_supabase_debug_info():
     return {
         "is_supabase": is_supabase(),
         "url_present": bool(SUPABASE_URL),
-        "url_preview": SUPABASE_URL[:25] + "..." if SUPABASE_URL else "None",
+        "url_preview": (SUPABASE_URL[:30] + "...") if SUPABASE_URL else "Falta URL",
         "key_present": bool(SUPABASE_KEY),
-        "key_preview": SUPABASE_KEY[:10] + "..." if SUPABASE_KEY else "None"
+        "key_preview": (SUPABASE_KEY[:15] + "...") if SUPABASE_KEY else "Falta Key",
+        "last_error": LAST_SUPABASE_ERROR
     }
 
-# ==================== SUPABASE REST CLIENT ====================
 def supabase_request(endpoint: str, method: str = "GET", data=None, headers_extra: dict = None):
+    global LAST_SUPABASE_ERROR
     if not is_supabase():
         return None
         
@@ -53,19 +55,20 @@ def supabase_request(endpoint: str, method: str = "GET", data=None, headers_extr
     req = urllib.request.Request(url, data=body_bytes, headers=headers, method=method)
     
     try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=9) as resp:
             resp_data = resp.read().decode('utf-8')
+            LAST_SUPABASE_ERROR = None
             return json.loads(resp_data) if resp_data else []
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8', errors='ignore')
+        LAST_SUPABASE_ERROR = f"HTTP {e.code}: {error_body}"
         print(f"Supabase HTTPError {e.code}: {error_body}")
-        # Return error dict so caller can diagnose
         return {"error": True, "status": e.code, "message": error_body}
     except Exception as e:
+        LAST_SUPABASE_ERROR = str(e)
         print(f"Supabase Exception: {e}")
         return {"error": True, "message": str(e)}
 
-# ==================== SQLITE FALLBACK ====================
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -94,7 +97,7 @@ def init_db():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        feed_id INTEGER NOT NULL,
+        feed_id INTEGER,
         guid TEXT UNIQUE NOT NULL,
         title TEXT NOT NULL,
         url TEXT NOT NULL,
@@ -117,8 +120,7 @@ def init_db():
         user_rating TEXT DEFAULT 'none',
         user_feedback_comment TEXT,
         feedback_at TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(feed_id) REFERENCES feeds(id) ON DELETE CASCADE
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     """)
     cursor.execute("""
@@ -136,7 +138,3 @@ def init_db():
     """)
     conn.commit()
     conn.close()
-
-if __name__ == "__main__":
-    init_db()
-    print("DB Init Check:", get_supabase_debug_info())

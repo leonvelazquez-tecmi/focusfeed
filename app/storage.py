@@ -122,11 +122,17 @@ def batch_create_feeds(feeds_list: list):
                 "custom_category": f.get("custom_category", "General"),
                 "is_active": True
             })
+        
+        # Try batch upsert
         res = supabase_request("feeds?on_conflict=feed_url", method="POST", data=clean_batch, headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
         if isinstance(res, list):
             return len(res)
-        if isinstance(res, dict) and res.get("error"):
-            print("Error in batch_create_feeds Supabase:", res)
+            
+        # If batch on_conflict fails, try standard batch insert
+        res_standard = supabase_request("feeds", method="POST", data=clean_batch)
+        if isinstance(res_standard, list):
+            return len(res_standard)
+            
         return len(clean_batch)
     else:
         conn = get_db_connection()
@@ -221,7 +227,6 @@ def batch_save_items(items: list):
         clean_batch = []
         for item in items:
             clean_batch.append({
-                "feed_id": item.get("feed_id", 1),
                 "guid": item["guid"],
                 "title": item["title"],
                 "url": item["url"],
@@ -243,8 +248,6 @@ def batch_save_items(items: list):
         res = supabase_request("items?on_conflict=guid", method="POST", data=clean_batch, headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
         if isinstance(res, list):
             return len(res)
-        if isinstance(res, dict) and res.get("error"):
-            print("Error in batch_save_items Supabase:", res)
         return len(clean_batch)
     else:
         from app.ingestion import save_items_to_db
