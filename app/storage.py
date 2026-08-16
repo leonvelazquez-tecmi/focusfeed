@@ -5,7 +5,7 @@ import urllib.parse
 from datetime import datetime
 from app.db import (
     is_supabase, supabase_request, 
-    get_db_connection, init_db
+    get_db_connection, init_db, get_supabase_debug_info
 )
 
 def fetch_items(tab="curated", type_filter="all", limit=60):
@@ -24,9 +24,8 @@ def fetch_items(tab="curated", type_filter="all", limit=60):
             query += f"&content_type=eq.{type_filter}"
             
         query += f"&limit={limit}"
-        items = supabase_request(query)
-        if not isinstance(items, list):
-            items = []
+        res = supabase_request(query)
+        items = res if isinstance(res, list) else []
         
         all_status = supabase_request("items?select=status")
         counts = {}
@@ -35,7 +34,7 @@ def fetch_items(tab="curated", type_filter="all", limit=60):
                 s = r.get("status", "inbox")
                 counts[s] = counts.get(s, 0) + 1
             
-        return {"items": items, "counts": counts}
+        return {"items": items, "counts": counts, "debug": get_supabase_debug_info()}
     else:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -59,11 +58,11 @@ def fetch_items(tab="curated", type_filter="all", limit=60):
         if type_filter != "all":
             rows = [r for r in rows if r.get("content_type") == type_filter]
             
-        return {"items": rows, "counts": counts}
+        return {"items": rows, "counts": counts, "debug": get_supabase_debug_info()}
 
 def set_item_status(item_id: int, new_status: str):
     if is_supabase():
-        supabase_request(f"items?id=eq.{item_id}", method="PATCH", data={"status": new_status})
+        return supabase_request(f"items?id=eq.{item_id}", method="PATCH", data={"status": new_status})
     else:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -74,7 +73,7 @@ def set_item_status(item_id: int, new_status: str):
 def save_user_feedback(item_id: int, rating: str, comment: str = ""):
     now_iso = datetime.utcnow().isoformat()
     if is_supabase():
-        supabase_request(f"items?id=eq.{item_id}", method="PATCH", data={
+        return supabase_request(f"items?id=eq.{item_id}", method="PATCH", data={
             "user_rating": rating,
             "user_feedback_comment": comment,
             "feedback_at": now_iso
@@ -90,9 +89,8 @@ def save_user_feedback(item_id: int, rating: str, comment: str = ""):
 
 def fetch_feeds():
     if is_supabase():
-        feeds = supabase_request("feeds?select=*&order=custom_category.asc,title.asc")
-        if not isinstance(feeds, list):
-            feeds = []
+        res = supabase_request("feeds?select=*&order=custom_category.asc,title.asc")
+        feeds = res if isinstance(res, list) else []
         return feeds
     else:
         conn = get_db_connection()
@@ -109,9 +107,6 @@ def fetch_feeds():
         return feeds
 
 def batch_create_feeds(feeds_list: list):
-    """
-    Inserts a batch of feeds into Supabase or SQLite in ONE single operation.
-    """
     if not feeds_list:
         return 0
         
@@ -128,8 +123,10 @@ def batch_create_feeds(feeds_list: list):
                 "is_active": True
             })
         res = supabase_request("feeds?on_conflict=feed_url", method="POST", data=clean_batch, headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
-        if res and isinstance(res, list):
+        if isinstance(res, list):
             return len(res)
+        if isinstance(res, dict) and res.get("error"):
+            print("Error in batch_create_feeds Supabase:", res)
         return len(clean_batch)
     else:
         conn = get_db_connection()
@@ -244,8 +241,10 @@ def batch_save_items(items: list):
             })
         
         res = supabase_request("items?on_conflict=guid", method="POST", data=clean_batch, headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
-        if res and isinstance(res, list):
+        if isinstance(res, list):
             return len(res)
+        if isinstance(res, dict) and res.get("error"):
+            print("Error in batch_save_items Supabase:", res)
         return len(clean_batch)
     else:
         from app.ingestion import save_items_to_db

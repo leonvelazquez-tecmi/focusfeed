@@ -5,21 +5,41 @@ import urllib.request
 import urllib.parse
 from datetime import datetime
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "") or os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+# Check all possible naming conventions for Supabase env vars in Vercel
+SUPABASE_URL = (
+    os.environ.get("SUPABASE_URL") or 
+    os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or 
+    ""
+).rstrip("/")
+
+SUPABASE_KEY = (
+    os.environ.get("SUPABASE_KEY") or 
+    os.environ.get("SUPABASE_ANON_KEY") or 
+    os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY") or 
+    os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or 
+    ""
+)
 
 DB_PATH = os.environ.get("FEED_DB_PATH", "/tmp/feed_curator.db")
 
 def is_supabase():
     return bool(SUPABASE_URL and SUPABASE_KEY)
 
+def get_supabase_debug_info():
+    return {
+        "is_supabase": is_supabase(),
+        "url_present": bool(SUPABASE_URL),
+        "url_preview": SUPABASE_URL[:25] + "..." if SUPABASE_URL else "None",
+        "key_present": bool(SUPABASE_KEY),
+        "key_preview": SUPABASE_KEY[:10] + "..." if SUPABASE_KEY else "None"
+    }
+
 # ==================== SUPABASE REST CLIENT ====================
-def supabase_request(endpoint: str, method: str = "GET", data: dict or list = None, params: dict = None, headers_extra: dict = None):
-    url = f"{SUPABASE_URL}/rest/v1/{endpoint}"
-    if params:
-        query_str = urllib.parse.urlencode(params)
-        url += f"?{query_str}"
+def supabase_request(endpoint: str, method: str = "GET", data=None, headers_extra: dict = None):
+    if not is_supabase():
+        return None
         
+    url = f"{SUPABASE_URL}/rest/v1/{endpoint}"
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -33,16 +53,19 @@ def supabase_request(endpoint: str, method: str = "GET", data: dict or list = No
     req = urllib.request.Request(url, data=body_bytes, headers=headers, method=method)
     
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:
             resp_data = resp.read().decode('utf-8')
             return json.loads(resp_data) if resp_data else []
     except urllib.error.HTTPError as e:
-        error_body = e.read().decode('utf-8')
-        return []
-    except Exception:
-        return []
+        error_body = e.read().decode('utf-8', errors='ignore')
+        print(f"Supabase HTTPError {e.code}: {error_body}")
+        # Return error dict so caller can diagnose
+        return {"error": True, "status": e.code, "message": error_body}
+    except Exception as e:
+        print(f"Supabase Exception: {e}")
+        return {"error": True, "message": str(e)}
 
-# ==================== LOCAL SQLITE FALLBACK ====================
+# ==================== SQLITE FALLBACK ====================
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -50,35 +73,9 @@ def get_db_connection():
 
 def init_db():
     if is_supabase():
-        # In Supabase, tables are created via Supabase SQL Editor.
-        # We ensure user_profile has default record if empty.
-        try:
-            profile = supabase_request("user_profile?select=*&limit=1")
-            if not profile:
-                default_topics = json.dumps([
-                    "Inteligencia Artificial Aplicada y Sistemas Agénticos",
-                    "Gestión del Conocimiento Personal (PKM, Obsidian, Zettelkasten)",
-                    "Transformación Institucional y Modelos Educativos (MAPS, FIT)",
-                    "Cine de autor, narrativa visual y formato gran escala",
-                    "Música contemporánea, post-punk, vinilos y análisis cultural",
-                    "Enología y exploración gastronómica"
-                ], ensure_ascii=False)
-                default_prompt = "Prioriza profundidad conceptual, rigor analítico y valor duradero. Descarta clickbait y noticias superficiales."
-                supabase_request("user_profile", method="POST", data={
-                    "id": 1,
-                    "user_name": "León Velázquez",
-                    "focus_topics": default_topics,
-                    "system_prompt_criteria": default_prompt,
-                    "learned_preferences": json.dumps({"boosted_authors": [], "boosted_tags": {}, "penalized_tags": {}}, ensure_ascii=False)
-                })
-        except Exception:
-            pass
         return
-
-    # SQLite Local init
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS feeds (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,7 +91,6 @@ def init_db():
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     """)
-
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -125,7 +121,6 @@ def init_db():
         FOREIGN KEY(feed_id) REFERENCES feeds(id) ON DELETE CASCADE
     );
     """)
-
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS user_profile (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,26 +134,9 @@ def init_db():
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     """)
-
-    cursor.execute("SELECT COUNT(*) as count FROM user_profile")
-    if cursor.fetchone()["count"] == 0:
-        default_topics = json.dumps([
-            "Inteligencia Artificial Aplicada y Sistemas Agénticos",
-            "Gestión del Conocimiento Personal (PKM, Obsidian, Zettelkasten)",
-            "Transformación Institucional y Modelos Educativos (MAPS, FIT)",
-            "Cine de autor, narrativa visual y formato gran escala",
-            "Música contemporánea, post-punk, vinilos y análisis cultural",
-            "Enología y exploración gastronómica"
-        ], ensure_ascii=False)
-        default_prompt = "Prioriza profundidad conceptual, rigor analítico y valor duradero."
-        cursor.execute("""
-        INSERT INTO user_profile (user_name, focus_topics, system_prompt_criteria, learned_preferences)
-        VALUES (?, ?, ?, ?)
-        """, ("León Velázquez", default_topics, default_prompt, json.dumps({"boosted_authors": [], "boosted_tags": {}, "penalized_tags": {}}, ensure_ascii=False)))
-
     conn.commit()
     conn.close()
 
 if __name__ == "__main__":
     init_db()
-    print("Database init executed. Supabase active:", is_supabase())
+    print("DB Init Check:", get_supabase_debug_info())

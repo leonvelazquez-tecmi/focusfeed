@@ -221,7 +221,7 @@
       <div class="space-y-3 text-xs">
         <div>
           <label class="text-slate-700 font-semibold block mb-1">Pega el link de un canal de YouTube, Blog o Substack:</label>
-          <input type="text" id="feed-url-input" placeholder="https://www.youtube.com/@Canal o Substack" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 text-xs outline-none focus:border-blue-500 focus:bg-white">
+          <input type="text" id="feed-url-input" placeholder="https://www.youtube.com/@TheVerge o RSS" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 text-xs outline-none focus:border-blue-500 focus:bg-white">
         </div>
         <button onclick="addSingleFeed()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-sm">
           + Agregar Canal
@@ -230,7 +230,7 @@
         <div class="border-t border-slate-200 pt-3 space-y-2">
           <label class="text-slate-700 font-semibold block">O pega tu archivo OPML (Feedly / YouTube):</label>
           <textarea id="opml-input" rows="4" placeholder="<opml version='1.0'>...</textarea>" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-mono text-[10px] text-slate-800 outline-none focus:bg-white"></textarea>
-          <button onclick="importOpml()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2 rounded-xl transition text-xs">
+          <button onclick="importOpml()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-xl transition text-xs">
             Importar todas las suscripciones
           </button>
         </div>
@@ -246,11 +246,15 @@
           <span>🧠</span> Preferencias Aprendidas por la IA
         </h3>
         <button onclick="closeModal('modal-learned')" class="p-1 text-slate-400 hover:text-slate-600">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
       <div class="space-y-4 text-xs">
+        <div id="db-status-pill" class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 font-mono">
+          Verificando estado de Supabase...
+        </div>
+
         <p class="text-slate-600 leading-relaxed">
           FocusFeed calibra las recomendaciones con tus calificaciones (❤️ / 👎):
         </p>
@@ -303,7 +307,7 @@
       toast.classList.remove('-translate-y-16', 'opacity-0');
       setTimeout(() => {
         toast.classList.add('-translate-y-16', 'opacity-0');
-      }, 3000);
+      }, 3500);
     }
 
     function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
@@ -327,7 +331,6 @@
         }
       });
 
-      // Bottom nav bar active indicator
       ['curated', 'reading', 'sources'].forEach(t => {
         const bbtn = document.getElementById(`bnav-${t}`);
         if (bbtn) {
@@ -391,7 +394,6 @@
         return;
       }
 
-      // Group by category
       const categories = {};
       cachedFeeds.forEach(f => {
         const cat = f.custom_category || 'General';
@@ -458,7 +460,7 @@
           <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6 space-y-3 shadow-sm">
             <div class="text-3xl">🌿</div>
             <h3 class="text-sm font-bold text-slate-900">Todo al día en este feed</h3>
-            <p class="text-xs text-slate-500 max-w-sm mx-auto">Tienes ${cachedFeeds.length} canales registrados en Supabase. Haz clic en "Sincronizar" para descargar los artículos más recientes.</p>
+            <p class="text-xs text-slate-500 max-w-sm mx-auto">Tienes ${cachedFeeds.length} canales en Supabase. Haz clic abajo para descargar los artículos más recientes.</p>
             <button onclick="syncAllBatches()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-md shadow-blue-500/20">
               ⚡ Sincronizar Feed Ahora
             </button>
@@ -775,18 +777,24 @@
       const url = document.getElementById('feed-url-input').value.trim();
       if (!url) return;
       try {
-        await fetch('/api/feeds', {
+        showToast('Conectando canal y descargando videos...', '⏳');
+        const res = await fetch('/api/feeds', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ url })
         });
-        showToast('Canal agregado y sincronizado');
-        document.getElementById('feed-url-input').value = '';
-        closeModal('modal-add');
-        await loadFeeds();
-        await loadItems();
+        const data = await res.json();
+        if (data.status === 'success') {
+          showToast(`Canal agregado (+${data.new_items || 0} videos)`, '✓');
+          document.getElementById('feed-url-input').value = '';
+          closeModal('modal-add');
+          await loadFeeds();
+          await loadItems();
+        } else {
+          showToast('Error: ' + (data.message || 'No se pudo agregar'), '⚠️');
+        }
       } catch (err) {
-        showToast('Error al agregar canal', '⚠️');
+        showToast('Error al agregar canal: ' + err.message, '⚠️');
       }
     }
 
@@ -794,21 +802,24 @@
       const text = document.getElementById('opml-input').value.trim();
       if (!text) return;
       try {
-        showToast('Procesando archivo OPML...', '⏳');
+        showToast('Procesando e insertando 102 canales...', '⏳');
         const res = await fetch('/api/feeds/import-opml', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ opml: text })
         });
         const data = await res.json();
-        showToast(`Importadas ${data.imported_count || 0} suscripciones`);
-        document.getElementById('opml-input').value = '';
-        closeModal('modal-add');
-        await loadFeeds();
-        // Trigger progressive sync for all channels
-        syncAllBatches();
+        if (data.status === 'success') {
+          showToast(`¡${data.imported_count} canales guardados en Supabase!`, '✓');
+          document.getElementById('opml-input').value = '';
+          closeModal('modal-add');
+          await loadFeeds();
+          syncAllBatches();
+        } else {
+          showToast('Error: ' + (data.message || 'Fallo al procesar'), '⚠️');
+        }
       } catch (err) {
-        showToast('Error al importar OPML', '⚠️');
+        showToast('Error al importar OPML: ' + err.message, '⚠️');
       }
     }
 
@@ -818,6 +829,16 @@
         const prof = await res.json();
         const learned = prof.learned_preferences || {};
         
+        // Debug status check
+        const dbStatus = document.getElementById('db-status-pill');
+        const statusRes = await fetch('/api/status');
+        const statusData = await statusRes.json();
+        if (statusData.is_supabase) {
+          dbStatus.innerHTML = '<span class="text-emerald-600 font-bold">● Supabase Conectado</span> (Persistencia en la nube activa)';
+        } else {
+          dbStatus.innerHTML = '<span class="text-amber-600 font-bold">● Modo Local / SQLite</span> (Revisa las variables de Supabase en Vercel)';
+        }
+
         const authorsList = document.getElementById('learned-authors-list');
         const authors = learned.boosted_authors || [];
         authorsList.innerHTML = authors.map(a => `<span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">✓ ${a}</span>`).join('') || '<span class="text-slate-400">Aún no has calificado autores.</span>';
