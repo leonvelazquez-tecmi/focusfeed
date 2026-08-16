@@ -90,6 +90,7 @@ def save_user_feedback(item_id: int, rating: str, comment: str = ""):
 def get_item_by_id(item_id: int):
     if is_supabase():
         res = supabase_request(f"items?id=eq.{item_id}&select=*&limit=1")
+        print(f"DEBUG get_item_by_id({item_id}) raw res type={type(res)} value={res!r:.500}")
         if isinstance(res, list):
             return res[0] if res else None
         err_msg = res.get("message") if isinstance(res, dict) else str(res)
