@@ -233,8 +233,16 @@ def batch_save_items(items: list):
     if not items:
         return 0
     if is_supabase():
-        clean_batch = []
+        # Postgres rechaza el batch completo si el UPSERT intenta afectar el mismo
+        # guid dos veces en un solo comando (ON CONFLICT DO UPDATE cannot affect
+        # row a second time). Dedup por guid antes de enviar, quedándonos con la
+        # última versión (más reciente/enriquecida) de cada item.
+        by_guid = {}
         for item in items:
+            by_guid[item["guid"]] = item
+
+        clean_batch = []
+        for item in by_guid.values():
             clean_batch.append({
                 "feed_id": item.get("feed_id"),
                 "guid": item["guid"],
