@@ -90,8 +90,10 @@ def save_user_feedback(item_id: int, rating: str, comment: str = ""):
 def get_item_by_id(item_id: int):
     if is_supabase():
         res = supabase_request(f"items?id=eq.{item_id}&select=*&limit=1")
-        if isinstance(res, list) and res:
-            return res[0]
+        if isinstance(res, list):
+            return res[0] if res else None
+        err_msg = res.get("message") if isinstance(res, dict) else str(res)
+        print(f"get_item_by_id({item_id}): Supabase rechazó la consulta: {err_msg}")
         return None
     else:
         conn = get_db_connection()
