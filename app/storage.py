@@ -90,7 +90,6 @@ def save_user_feedback(item_id: int, rating: str, comment: str = ""):
 def get_item_by_id(item_id: int):
     if is_supabase():
         res = supabase_request(f"items?id=eq.{item_id}&select=*&limit=1")
-        print(f"DEBUG get_item_by_id({item_id}) raw res type={type(res)} value={res!r:.500}")
         if isinstance(res, list):
             return res[0] if res else None
         err_msg = res.get("message") if isinstance(res, dict) else str(res)
@@ -105,18 +104,22 @@ def get_item_by_id(item_id: int):
         return dict(row) if row else None
 
 def update_learned_preferences(learned: dict):
+    # PATCH id=eq.1 no-opea en silencio si la fila id=1 de user_profile aun
+    # no existe (nunca hubo seed). Se usa upsert para que se cree si falta.
     now_iso = datetime.utcnow().isoformat()
     learned_json = json.dumps(learned, ensure_ascii=False)
     if is_supabase():
-        return supabase_request("user_profile?id=eq.1", method="PATCH", data={
-            "learned_preferences": learned_json,
-            "updated_at": now_iso
-        })
+        return supabase_request(
+            "user_profile?on_conflict=id", method="POST",
+            data={"id": 1, "learned_preferences": learned_json, "updated_at": now_iso},
+            headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"}
+        )
     else:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-        UPDATE user_profile SET learned_preferences = ?, updated_at = ? WHERE id = 1
+        INSERT INTO user_profile (id, learned_preferences, updated_at) VALUES (1, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET learned_preferences=excluded.learned_preferences, updated_at=excluded.updated_at
         """, (learned_json, now_iso))
         conn.commit()
         conn.close()
@@ -288,18 +291,28 @@ def fetch_profile():
         return get_user_profile()
 
 def save_profile_data(focus_topics: list, criteria: str = ""):
+    # Mismo problema que update_learned_preferences: PATCH id=eq.1 no crea
+    # la fila si no existe. Se usa upsert para que quede creada.
     topics_json = json.dumps(focus_topics, ensure_ascii=False)
+    now_iso = datetime.utcnow().isoformat()
     if is_supabase():
         data = {
+            "id": 1,
             "focus_topics": topics_json,
             "system_prompt_criteria": criteria,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": now_iso
         }
-        supabase_request("user_profile?id=eq.1", method="PATCH", data=data)
+        supabase_request(
+            "user_profile?on_conflict=id", method="POST", data=data,
+            headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"}
+        )
     else:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("UPDATE user_profile SET focus_topics = ?, system_prompt_criteria = ? WHERE id = 1", (topics_json, criteria))
+        cursor.execute("""
+        INSERT INTO user_profile (id, focus_topics, system_prompt_criteria, updated_at) VALUES (1, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET focus_topics=excluded.focus_topics, system_prompt_criteria=excluded.system_prompt_criteria, updated_at=excluded.updated_at
+        """, (topics_json, criteria, now_iso))
         conn.commit()
         conn.close()
 
