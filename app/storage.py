@@ -8,8 +8,6 @@ from app.db import (
     get_db_connection, init_db
 )
 
-# ==================== DATA ACCESS LAYER ====================
-
 def fetch_items(tab="curated", type_filter="all", limit=60):
     if is_supabase():
         query = "items?select=*"
@@ -30,7 +28,6 @@ def fetch_items(tab="curated", type_filter="all", limit=60):
         if not isinstance(items, list):
             items = []
         
-        # Calculate counts
         all_status = supabase_request("items?select=status")
         counts = {}
         if isinstance(all_status, list):
@@ -93,11 +90,9 @@ def save_user_feedback(item_id: int, rating: str, comment: str = ""):
 
 def fetch_feeds():
     if is_supabase():
-        feeds = supabase_request("feeds?select=*&order=created_at.desc")
+        feeds = supabase_request("feeds?select=*&order=custom_category.asc,title.asc")
         if not isinstance(feeds, list):
             feeds = []
-        for f in feeds:
-            f["item_count"] = 0
         return feeds
     else:
         conn = get_db_connection()
@@ -107,7 +102,7 @@ def fetch_feeds():
         FROM feeds f 
         LEFT JOIN items i ON f.id = i.feed_id 
         GROUP BY f.id 
-        ORDER BY f.created_at DESC
+        ORDER BY f.custom_category ASC, f.title ASC
         """)
         feeds = [dict(r) for r in cursor.fetchall()]
         conn.close()
@@ -120,7 +115,7 @@ def create_or_update_feed(title: str, feed_url: str, feed_type: str = "youtube",
             "feed_url": feed_url,
             "site_url": site_url,
             "feed_type": feed_type,
-            "custom_category": category,
+            "custom_category": category or "General",
             "is_active": True
         }
         res = supabase_request("feeds?on_conflict=feed_url", method="POST", data=data, headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
@@ -214,7 +209,6 @@ def batch_save_items(items: list):
                 "status": "inbox"
             })
         
-        # Batch insert with PostgREST on_conflict=guid upsert
         res = supabase_request("items?on_conflict=guid", method="POST", data=clean_batch, headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
         if res and isinstance(res, list):
             return len(res)
@@ -224,7 +218,6 @@ def batch_save_items(items: list):
         return save_items_to_db(items)
 
 def ensure_seed_if_empty():
-    """Seeds initial feeds if empty."""
     feeds = fetch_feeds()
     if not feeds:
         create_or_update_feed("Andrej Karpathy", "https://www.youtube.com/feeds/videos.xml?channel_id=UCXUPKJOtpqmgUOxw8p9n6Tw", "youtube", "IA & Agentes")

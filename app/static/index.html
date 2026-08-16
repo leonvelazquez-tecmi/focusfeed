@@ -54,7 +54,7 @@
 </head>
 <body class="font-sans min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
 
-  <!-- Top Clean Navigation Bar (Feedly / Substack style) -->
+  <!-- Top Navigation Bar -->
   <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-slate-200 px-4 py-2.5 shadow-sm">
     <div class="max-w-2xl mx-auto flex items-center justify-between">
       <div class="flex items-center space-x-2">
@@ -68,8 +68,9 @@
 
       <!-- Actions -->
       <div class="flex items-center space-x-2">
-        <button onclick="syncFeeds()" id="sync-btn" title="Sincronizar feeds" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 border border-slate-200 transition">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        <button onclick="syncAllBatches()" id="sync-btn" title="Sincronizar feeds" class="px-2.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center gap-1 text-slate-700 border border-slate-200 text-xs font-semibold transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span class="hidden sm:inline">Sincronizar</span>
         </button>
         <button onclick="openModal('modal-add')" title="Agregar canal o OPML" class="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-600/30 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
@@ -79,7 +80,7 @@
   </header>
 
   <!-- Filter & Segment Tabs -->
-  <section class="sticky top-[53px] z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-2">
+  <section id="filter-section" class="sticky top-[53px] z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-2">
     <div class="max-w-2xl mx-auto flex items-center justify-between gap-2 overflow-x-auto custom-scrollbar">
       <div class="flex items-center space-x-1.5 text-xs font-semibold">
         <button onclick="setTab('curated')" id="tab-curated" class="px-3.5 py-1.5 rounded-full bg-slate-900 text-white font-bold flex items-center gap-1.5 shadow-sm transition">
@@ -89,7 +90,10 @@
           <span>🔖</span> Guardados (<span id="count-reading">0</span>)
         </button>
         <button onclick="setTab('inbox')" id="tab-inbox" class="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1">
-          <span>📥</span> Todos
+          <span>📥</span> Todo
+        </button>
+        <button onclick="setTab('sources')" id="tab-sources" class="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1">
+          <span>📡</span> Fuentes (<span id="count-sources">0</span>)
         </button>
       </div>
 
@@ -101,10 +105,19 @@
     </div>
   </section>
 
-  <!-- Main Feed Stream -->
+  <!-- Main Container -->
   <main class="flex-1 max-w-2xl w-full mx-auto px-4 py-4 space-y-4">
-    <!-- Active Topics Card -->
-    <div class="bg-white border border-blue-100 rounded-2xl p-3.5 flex items-center justify-between text-xs shadow-sm">
+    <!-- Progress banner during syncing -->
+    <div id="sync-progress-banner" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-3 text-xs text-blue-900 flex items-center justify-between shadow-sm">
+      <div class="flex items-center space-x-2">
+        <span class="animate-spin text-blue-600 font-bold">↻</span>
+        <span id="sync-progress-text">Sincronizando canales...</span>
+      </div>
+      <span id="sync-progress-count" class="font-bold text-blue-700">0/102</span>
+    </div>
+
+    <!-- Active Topics Header -->
+    <div id="topics-banner" class="bg-white border border-blue-100 rounded-2xl p-3.5 flex items-center justify-between text-xs shadow-sm">
       <div class="flex items-center space-x-2.5">
         <span class="text-blue-600 text-base">🧠</span>
         <div>
@@ -121,22 +134,27 @@
     <div id="items-list" class="space-y-4">
       <div class="text-center py-16 text-slate-400 text-xs">Cargando contenido...</div>
     </div>
+
+    <!-- Sources / Canales View Container -->
+    <div id="sources-list" class="hidden space-y-4">
+      <!-- Grouped Feeds Rendered Here -->
+    </div>
   </main>
 
-  <!-- Bottom Navigation Bar (Feedly / Substack style) -->
+  <!-- Bottom Navigation Bar -->
   <footer class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-2xl border-t border-slate-200 bottom-nav-safe shadow-lg">
     <div class="max-w-2xl mx-auto flex items-center justify-around py-2 text-[10px] font-semibold text-slate-500">
-      <button onclick="setTab('curated')" class="flex flex-col items-center gap-1 text-blue-600">
+      <button onclick="setTab('curated')" id="bnav-curated" class="flex flex-col items-center gap-1 text-blue-600">
         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
         <span>Para ti</span>
       </button>
-      <button onclick="setTab('reading')" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
+      <button onclick="setTab('reading')" id="bnav-reading" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
         <span>Guardados</span>
       </button>
-      <button onclick="setTab('inbox')" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
+      <button onclick="setTab('sources')" id="bnav-sources" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-        <span>Todos</span>
+        <span>Fuentes</span>
       </button>
       <button onclick="openModal('modal-learned')" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
@@ -145,7 +163,7 @@
     </div>
   </footer>
 
-  <!-- Modal: Calificar / Entrenar IA -->
+  <!-- Modal: Calificar / Feedback -->
   <div id="modal-feedback" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-white border border-slate-200 rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -178,7 +196,7 @@
 
         <div>
           <label class="font-semibold text-slate-700 block mb-1">Comentario o Instrucción para la IA:</label>
-          <textarea id="feedback-comment" rows="3" placeholder="Ej: Me interesan mucho estos análisis, pero con menos enfoque en noticias del día..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 text-xs outline-none focus:border-blue-500 focus:bg-white"></textarea>
+          <textarea id="feedback-comment" rows="3" placeholder="Ej: Me interesan más análisis técnicos, menos noticias del día..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 text-xs outline-none focus:border-blue-500 focus:bg-white"></textarea>
         </div>
 
         <button onclick="submitItemFeedback()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-md shadow-blue-500/20">
@@ -196,7 +214,7 @@
           <span>➕</span> Agregar Suscripciones
         </h3>
         <button onclick="closeModal('modal-add')" class="p-1 text-slate-400 hover:text-slate-600">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
@@ -220,7 +238,7 @@
     </div>
   </div>
 
-  <!-- Modal: Ver Preferencias IA -->
+  <!-- Modal: Preferencias IA -->
   <div id="modal-learned" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div class="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar">
       <div class="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -234,11 +252,11 @@
 
       <div class="space-y-4 text-xs">
         <p class="text-slate-600 leading-relaxed">
-          FocusFeed construye este perfil dinámico a partir de tus interacciones (❤️ / 👎 / calificaciones) para priorizar lo que realmente te interesa:
+          FocusFeed calibra las recomendaciones con tus calificaciones (❤️ / 👎):
         </p>
 
         <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-          <h4 class="font-bold text-emerald-700 text-xs">🏆 Canales y Autores con Boost Positivo</h4>
+          <h4 class="font-bold text-emerald-700 text-xs">🏆 Canales con Boost Positivo</h4>
           <div id="learned-authors-list" class="flex flex-wrap gap-1.5 text-[11px]"></div>
         </div>
 
@@ -267,11 +285,14 @@
   <script>
     let currentTab = 'curated';
     let cachedItems = [];
+    let cachedFeeds = [];
     let activeFeedbackItemId = null;
     let selectedRating = 'love';
+    let isSyncing = false;
 
     async function init() {
       await loadProfile();
+      await loadFeeds();
       await loadItems();
     }
 
@@ -282,7 +303,7 @@
       toast.classList.remove('-translate-y-16', 'opacity-0');
       setTimeout(() => {
         toast.classList.add('-translate-y-16', 'opacity-0');
-      }, 2500);
+      }, 3000);
     }
 
     function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
@@ -290,7 +311,13 @@
 
     function setTab(tab) {
       currentTab = tab;
-      ['curated', 'reading', 'inbox'].forEach(t => {
+      
+      const isSources = (tab === 'sources');
+      document.getElementById('items-list').classList.toggle('hidden', isSources);
+      document.getElementById('sources-list').classList.toggle('hidden', !isSources);
+      document.getElementById('topics-banner').classList.toggle('hidden', isSources);
+
+      ['curated', 'reading', 'inbox', 'sources'].forEach(t => {
         const btn = document.getElementById(`tab-${t}`);
         if (!btn) return;
         if (t === tab) {
@@ -299,7 +326,20 @@
           btn.className = "px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1";
         }
       });
-      loadItems();
+
+      // Bottom nav bar active indicator
+      ['curated', 'reading', 'sources'].forEach(t => {
+        const bbtn = document.getElementById(`bnav-${t}`);
+        if (bbtn) {
+          bbtn.className = (t === tab) ? "flex flex-col items-center gap-1 text-blue-600" : "flex flex-col items-center gap-1 hover:text-slate-900 transition";
+        }
+      });
+
+      if (isSources) {
+        renderSourcesView();
+      } else {
+        loadItems();
+      }
     }
 
     async function loadItems() {
@@ -322,14 +362,106 @@
       }
     }
 
+    async function loadFeeds() {
+      try {
+        const res = await fetch('/api/feeds');
+        cachedFeeds = await res.json();
+        document.getElementById('count-sources').innerText = cachedFeeds.length || 0;
+        if (currentTab === 'sources') {
+          renderSourcesView();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function renderSourcesView() {
+      const sourcesEl = document.getElementById('sources-list');
+      if (!cachedFeeds || cachedFeeds.length === 0) {
+        sourcesEl.innerHTML = `
+          <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6 space-y-3 shadow-sm">
+            <div class="text-3xl">📡</div>
+            <h3 class="text-sm font-bold text-slate-900">No hay canales registrados</h3>
+            <p class="text-xs text-slate-500 max-w-sm mx-auto">Pega tu archivo OPML de Feedly o la URL de un canal con el botón (+).</p>
+            <button onclick="openModal('modal-add')" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-md shadow-blue-500/20">
+              + Agregar Canales
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      // Group by category
+      const categories = {};
+      cachedFeeds.forEach(f => {
+        const cat = f.custom_category || 'General';
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push(f);
+      });
+
+      let html = `
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900">Tus ${cachedFeeds.length} Canales y Fuentes</h2>
+            <p class="text-xs text-slate-500">Guardados en tu base de datos permanente en Supabase</p>
+          </div>
+          <button onclick="syncAllBatches()" class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-sm">
+            ⚡ Sincronizar todos
+          </button>
+        </div>
+      `;
+
+      for (const [catName, fList] of Object.entries(categories)) {
+        html += `
+          <div class="space-y-2">
+            <div class="flex items-center justify-between px-1">
+              <h3 class="text-xs font-bold text-blue-600 uppercase tracking-wider">${catName}</h3>
+              <span class="text-[11px] font-semibold text-slate-400">${fList.length} fuentes</span>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 shadow-sm overflow-hidden">
+              ${fList.map(f => {
+                const isYt = f.feed_type === 'youtube';
+                const icon = isYt ? '🎬' : (f.feed_type === 'substack' ? '💌' : '📄');
+                return `
+                  <div class="p-3.5 flex items-center justify-between hover:bg-slate-50/80 transition text-xs">
+                    <div class="flex items-center space-x-2.5 overflow-hidden">
+                      <span class="text-base shrink-0">${icon}</span>
+                      <div class="truncate">
+                        <div class="font-bold text-slate-900 truncate">${f.title}</div>
+                        <div class="text-[10px] text-slate-400 truncate max-w-xs">${f.feed_url}</div>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center space-x-1.5 shrink-0 ml-2">
+                      <button onclick="syncSingleFeed(${f.id}, '${f.feed_url}', '${f.feed_type}')" title="Cargar artículos de este canal" class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium">
+                        ↻
+                      </button>
+                      <button onclick="deleteFeed(${f.id})" title="Eliminar canal" class="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 text-xs">
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      sourcesEl.innerHTML = html;
+    }
+
     function renderFeed(items) {
       const listEl = document.getElementById('items-list');
       if (!items || items.length === 0) {
         listEl.innerHTML = `
-          <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6 space-y-2 shadow-sm">
+          <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6 space-y-3 shadow-sm">
             <div class="text-3xl">🌿</div>
-            <h3 class="text-sm font-bold text-slate-900">Todo al día</h3>
-            <p class="text-xs text-slate-500 max-w-sm mx-auto">No hay contenido en esta categoría. Puedes sincronizar o importar tus suscripciones con el botón (+).</p>
+            <h3 class="text-sm font-bold text-slate-900">Todo al día en este feed</h3>
+            <p class="text-xs text-slate-500 max-w-sm mx-auto">Tienes ${cachedFeeds.length} canales registrados en Supabase. Haz clic en "Sincronizar" para descargar los artículos más recientes.</p>
+            <button onclick="syncAllBatches()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-md shadow-blue-500/20">
+              ⚡ Sincronizar Feed Ahora
+            </button>
           </div>
         `;
         return;
@@ -345,11 +477,9 @@
           matchBadge = `<span class="text-[11px] font-bold text-emerald-600 flex items-center gap-1">✦ ${score}% Top Match</span>`;
         }
 
-        // Clean Light-Mode Card (Feedly / Substack Aesthetic)
         if (isVideo) {
           return `
             <article class="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden transition shadow-sm hover:shadow-md space-y-3 pb-3.5">
-              <!-- Video Cover Thumbnail -->
               <a href="${item.url}" target="_blank" class="block relative aspect-video bg-slate-950 group">
                 <img src="${item.thumbnail_url || 'https://i.ytimg.com/vi/' + item.video_id + '/hqdefault.jpg'}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
                 <div class="absolute bottom-2.5 right-2.5 bg-black/80 px-2 py-0.5 rounded-md text-[10px] font-bold text-white tracking-wide">
@@ -357,7 +487,6 @@
                 </div>
               </a>
 
-              <!-- Meta & Title -->
               <div class="px-4 space-y-2">
                 <div class="flex items-center justify-between text-xs">
                   <div class="flex items-center space-x-1.5">
@@ -379,7 +508,6 @@
                   </p>
                 ` : ''}
 
-                <!-- AI Summary Accordion (YouTube Style) -->
                 <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
                   <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
                     <div class="font-bold text-slate-800 flex items-center gap-1 text-[11px]">
@@ -400,7 +528,6 @@
                   </div>
                 </div>
 
-                <!-- Rating & Actions Bar -->
                 <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                   <div class="flex items-center space-x-1">
                     <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition text-sm">
@@ -427,7 +554,6 @@
             </article>
           `;
         } else {
-          // Feedly / Substack Magazine Light Card
           return `
             <article class="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-4 sm:p-5 transition shadow-sm hover:shadow-md space-y-3">
               <div class="flex items-center justify-between text-xs">
@@ -446,7 +572,6 @@
                 </p>
               </div>
 
-              <!-- AI Accordion -->
               <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
                 <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
                   <div class="font-bold text-slate-800 flex items-center gap-1 text-[11px]">
@@ -466,7 +591,6 @@
                 </div>
               </div>
 
-              <!-- Bottom Actions -->
               <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
                 <div class="flex items-center space-x-1">
                   <button onclick="quickRate(${item.id}, 'love')" class="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-red-500">
@@ -511,7 +635,7 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ rating })
         });
-        showToast(rating === 'love' ? '¡Guardado! (+Relevancia)' : 'Entendido, reduciremos este tipo de contenido');
+        showToast(rating === 'love' ? '¡Guardado! (+Relevancia)' : 'Entendido, reduciremos este contenido');
         await loadItems();
         await loadProfile();
       } catch (err) {
@@ -573,18 +697,77 @@
       }
     }
 
-    async function syncFeeds() {
-      const btn = document.getElementById('sync-btn');
-      btn.innerHTML = `<span class="animate-spin text-blue-600">↻</span>`;
+    async function syncAllBatches() {
+      if (isSyncing) return;
+      isSyncing = true;
+      
+      const banner = document.getElementById('sync-progress-banner');
+      const progressText = document.getElementById('sync-progress-text');
+      const progressCount = document.getElementById('sync-progress-count');
+      banner.classList.remove('hidden');
+
+      let offset = 0;
+      const limit = 15;
+      let totalFeeds = cachedFeeds.length || 102;
+      let totalNew = 0;
+
       try {
-        const res = await fetch('/api/feeds/sync', { method: 'POST' });
+        while (true) {
+          progressText.innerText = `Sincronizando canales ${offset + 1} al ${Math.min(offset + limit, totalFeeds)}...`;
+          progressCount.innerText = `${offset}/${totalFeeds}`;
+
+          const res = await fetch('/api/feeds/sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ offset, limit })
+          });
+          const data = await res.json();
+          totalNew += data.new_items || 0;
+          totalFeeds = data.total_feeds || totalFeeds;
+
+          if (!data.has_more || data.batch_size === 0) {
+            break;
+          }
+          offset += limit;
+          await loadItems();
+        }
+
+        showToast(`Sincronización completa (+${totalNew} artículos)`, '⚡');
+        await loadItems();
+        await loadFeeds();
+      } catch (err) {
+        showToast('Error durante la sincronización', '⚠️');
+      } finally {
+        isSyncing = false;
+        banner.classList.add('hidden');
+      }
+    }
+
+    async function syncSingleFeed(feedId, feedUrl, feedType) {
+      showToast('Cargando artículos del canal...', '↻');
+      try {
+        const res = await fetch('/api/feeds/sync-single', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ feed_id: feedId, feed_url: feedUrl, feed_type: feedType })
+        });
         const data = await res.json();
-        showToast(`Feed sincronizado (+${data.new_items || 0} nuevos)`);
+        showToast(`Canal sincronizado (+${data.new_items || 0} items)`);
         await loadItems();
       } catch (err) {
-        showToast('Error en sincronización', '⚠️');
-      } finally {
-        btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>`;
+        showToast('Error al sincronizar canal', '⚠️');
+      }
+    }
+
+    async function deleteFeed(feedId) {
+      if (!confirm('¿Eliminar este canal de tus suscripciones?')) return;
+      try {
+        await fetch(`/api/feeds/${feedId}`, { method: 'DELETE' });
+        showToast('Canal eliminado');
+        await loadFeeds();
+        await loadItems();
+      } catch (err) {
+        showToast('Error al eliminar canal', '⚠️');
       }
     }
 
@@ -597,9 +780,10 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ url })
         });
-        showToast('Canal agregado');
+        showToast('Canal agregado y sincronizado');
         document.getElementById('feed-url-input').value = '';
         closeModal('modal-add');
+        await loadFeeds();
         await loadItems();
       } catch (err) {
         showToast('Error al agregar canal', '⚠️');
@@ -610,6 +794,7 @@
       const text = document.getElementById('opml-input').value.trim();
       if (!text) return;
       try {
+        showToast('Procesando archivo OPML...', '⏳');
         const res = await fetch('/api/feeds/import-opml', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -619,7 +804,9 @@
         showToast(`Importadas ${data.imported_count || 0} suscripciones`);
         document.getElementById('opml-input').value = '';
         closeModal('modal-add');
-        await loadItems();
+        await loadFeeds();
+        // Trigger progressive sync for all channels
+        syncAllBatches();
       } catch (err) {
         showToast('Error al importar OPML', '⚠️');
       }

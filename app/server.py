@@ -30,9 +30,6 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 socketserver.TCPServer.allow_reuse_address = True
 
 def fetch_feed_and_parse(feed_dict: dict, profile: dict) -> list:
-    """
-    Fetches an individual RSS/YouTube feed with browser headers and pre-enriches items.
-    """
     feed_url = feed_dict.get("feed_url")
     feed_type = feed_dict.get("feed_type", "rss")
     feed_id = feed_dict.get("id", 1)
@@ -47,8 +44,8 @@ def fetch_feed_and_parse(feed_dict: dict, profile: dict) -> list:
             else:
                 parsed_items = parse_rss_feed_xml(xml_content, feed_id)
                 
-        # Pre-enrich top 3 items per feed with AI score and summary
-        for itm in parsed_items[:3]:
+        # Enrich top 4 items per feed
+        for itm in parsed_items[:4]:
             try:
                 analysis = analyze_with_llm(
                     title=itm["title"],
@@ -91,7 +88,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
         path = parsed_url.path
         query = urllib.parse.parse_qs(parsed_url.query)
 
-        # Static assets
+        # Static HTML
         if path == "/" or path == "/index.html":
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
@@ -183,10 +180,11 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return
 
-        # Add Feed
+        # Add single feed
         if path == "/api/feeds":
             raw_url = body.get("url", "").strip()
             title = body.get("title", "").strip()
+            category = body.get("category", "General").strip()
             if not raw_url:
                 self.send_json_response({"status": "error", "message": "URL requerida"}, 400)
                 return
@@ -199,11 +197,10 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                     title=final_title,
                     feed_url=resolved_feed_url,
                     feed_type=detected_type,
-                    category="General",
+                    category=category,
                     site_url=raw_url
                 )
                 
-                # Fetch items
                 profile = fetch_profile()
                 items = fetch_feed_and_parse({"feed_url": resolved_feed_url, "feed_type": detected_type, "id": feed_id}, profile)
                 if items:
@@ -214,21 +211,43 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return
 
-        # Sync Feeds in Parallel
+        # Sync single feed
+        if path == "/api/feeds/sync-single":
+            feed_id = body.get("feed_id")
+            feed_url = body.get("feed_url")
+            feed_type = body.get("feed_type", "rss")
+            if not feed_url:
+                self.send_json_response({"status": "error", "message": "URL requerida"}, 400)
+                return
+            try:
+                profile = fetch_profile()
+                items = fetch_feed_and_parse({"feed_url": feed_url, "feed_type": feed_type, "id": feed_id}, profile)
+                inserted = batch_save_items(items) if items else 0
+                self.send_json_response({"status": "success", "new_items": inserted})
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
+            return
+
+        # Batch Sync Feeds
         if path == "/api/feeds/sync":
+            offset = int(body.get("offset", 0))
+            limit = int(body.get("limit", 15))
+            
             try:
                 feeds = fetch_feeds()
                 if not feeds:
                     ensure_seed_if_empty()
                     feeds = fetch_feeds()
                     
+                total_feeds = len(feeds)
+                batch_slice = feeds[offset:offset+limit]
+                
                 profile = fetch_profile()
                 all_new_items = []
                 
-                # Fetch up to 12 feeds in parallel with ThreadPoolExecutor
-                with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-                    futures = [executor.submit(fetch_feed_and_parse, f, profile) for f in feeds[:12]]
-                    for fut in concurrent.futures.as_completed(futures, timeout=7):
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                    futures = [executor.submit(fetch_feed_and_parse, f, profile) for f in batch_slice]
+                    for fut in concurrent.futures.as_completed(futures, timeout=7.5):
                         try:
                             items = fut.result()
                             if items:
@@ -236,13 +255,15 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                         except Exception:
                             continue
                             
-                inserted_count = batch_save_items(all_new_items)
+                inserted_count = batch_save_items(all_new_items) if all_new_items else 0
                 
                 self.send_json_response({
                     "status": "success", 
+                    "offset": offset,
+                    "batch_size": len(batch_slice),
+                    "total_feeds": total_feeds,
                     "new_items": len(all_new_items),
-                    "inserted_count": inserted_count,
-                    "is_supabase": is_supabase()
+                    "has_more": (offset + limit) < total_feeds
                 })
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
@@ -257,7 +278,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 feeds = parse_opml(opml_text)
                 
-                # Register feeds
+                # Register all feeds
                 registered_feeds = []
                 for f in feeds:
                     fid = create_or_update_feed(
@@ -274,26 +295,26 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                         "feed_type": f["feed_type"]
                     })
                     
-                # Fetch initial batch of feeds in parallel
+                # Immediately fetch first 15 feeds in parallel
                 profile = fetch_profile()
-                all_imported_items = []
+                initial_items = []
                 with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-                    futures = [executor.submit(fetch_feed_and_parse, f, profile) for f in registered_feeds[:10]]
-                    for fut in concurrent.futures.as_completed(futures, timeout=7):
+                    futures = [executor.submit(fetch_feed_and_parse, f, profile) for f in registered_feeds[:15]]
+                    for fut in concurrent.futures.as_completed(futures, timeout=7.5):
                         try:
                             res_items = fut.result()
                             if res_items:
-                                all_imported_items.extend(res_items)
+                                initial_items.extend(res_items)
                         except Exception:
                             continue
                             
-                if all_imported_items:
-                    batch_save_items(all_imported_items)
+                if initial_items:
+                    batch_save_items(initial_items)
                     
                 self.send_json_response({
                     "status": "success", 
                     "imported_count": len(feeds),
-                    "initial_items_loaded": len(all_imported_items)
+                    "initial_items_loaded": len(initial_items)
                 })
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
