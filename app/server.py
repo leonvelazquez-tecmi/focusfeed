@@ -5,6 +5,7 @@ import urllib.parse
 import urllib.request
 import os
 import re
+import time
 import concurrent.futures
 from datetime import datetime
 
@@ -113,6 +114,65 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 "supabase_url_configured": bool(os.environ.get("SUPABASE_URL")),
                 "supabase_key_configured": bool(os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY"))
             })
+            return
+
+        elif path == "/api/cron/sync":
+            cron_secret = os.environ.get("CRON_SECRET")
+            if cron_secret:
+                auth_header = self.headers.get("Authorization", "")
+                if auth_header != f"Bearer {cron_secret}":
+                    self.send_json_response({"status": "error", "message": "No autorizado"}, 401)
+                    return
+
+            started = time.time()
+            time_budget_seconds = 50
+            batch_size = 15
+
+            try:
+                feeds = fetch_feeds()
+                if not feeds:
+                    ensure_seed_if_empty()
+                    feeds = fetch_feeds()
+
+                profile = fetch_profile()
+                total_feeds = len(feeds)
+                feeds_synced = 0
+                total_new_items = 0
+
+                offset = 0
+                while offset < total_feeds:
+                    if time.time() - started > time_budget_seconds:
+                        break
+
+                    batch_slice = feeds[offset:offset + batch_size]
+                    all_new_items = []
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                        futures = [executor.submit(fetch_feed_and_parse, f, profile) for f in batch_slice]
+                        for fut in concurrent.futures.as_completed(futures, timeout=7.5):
+                            try:
+                                items = fut.result()
+                                if items:
+                                    all_new_items.extend(items)
+                            except Exception as e:
+                                print(f"Cron sync: fallo al sincronizar feed: {e}")
+                                continue
+
+                    if all_new_items:
+                        total_new_items += batch_save_items(all_new_items)
+
+                    feeds_synced += len(batch_slice)
+                    offset += batch_size
+
+                self.send_json_response({
+                    "status": "success",
+                    "feeds_synced": feeds_synced,
+                    "total_feeds": total_feeds,
+                    "new_items": total_new_items,
+                    "completed": offset >= total_feeds,
+                    "elapsed_seconds": round(time.time() - started, 1)
+                })
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
             return
 
         elif path == "/api/items":
