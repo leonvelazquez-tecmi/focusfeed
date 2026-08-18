@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "focusfeed",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["run.py"],
+      "port": 8080
+    }
+  ]
+}

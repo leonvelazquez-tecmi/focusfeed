@@ -1,959 +1,675 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <title>FocusFeed</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', '"Plus Jakarta Sans"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
-            serif: ['Newsreader', 'Georgia', 'serif'],
-          },
-          colors: {
-            brand: {
-              50: '#eff6ff',
-              100: '#dbeafe',
-              500: '#3b82f6',
-              600: '#2563eb',
-              700: '#1d4ed8',
-            }
-          }
-        }
-      }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<title>FocusFeed</title>
+<link rel="manifest" href="/manifest.json">
+<style>
+  :root{
+    --bg:#f4f5f7; --surface:#ffffff; --surface-2:#f8fafc;
+    --text:#111827; --text-2:#4b5563; --text-3:#9096a1;
+    --border:#e4e7ec; --border-2:#eef0f3;
+    --accent:#2b8a3e; --accent-soft:#e9f6ec;
+    --blue:#2563eb; --blue-soft:#eff4ff;
+    --danger:#b42318;
+    --shadow:0 1px 2px rgba(16,24,40,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1115; --surface:#171a20; --surface-2:#1d2129;
+      --text:#f2f4f7; --text-2:#b6bcc6; --text-3:#7d848f;
+      --border:#262b33; --border-2:#20242b;
+      --accent:#4ade80; --accent-soft:#16281c;
+      --blue:#7aa2ff; --blue-soft:#161d2e;
+      --danger:#f97066;
+      --shadow:none;
     }
-  </script>
-  <style>
-    body {
-      padding-top: max(env(safe-area-inset-top), 10px);
-      padding-bottom: max(env(safe-area-inset-bottom), 76px);
-      -webkit-tap-highlight-color: transparent;
-      background-color: #f8fafc;
-      color: #0f172a;
-    }
-    .custom-scrollbar::-webkit-scrollbar { display: none; }
-    .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    .bottom-nav-safe {
-      padding-bottom: max(env(safe-area-inset-bottom), 12px);
-    }
-    .line-clamp-2 {
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-  </style>
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px; line-height:1.45; -webkit-font-smoothing:antialiased;
+    padding-bottom:calc(72px + env(safe-area-inset-bottom));
+  }
+  a{color:inherit;text-decoration:none}
+  button{font-family:inherit;font-size:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer}
+  .wrap{max-width:720px;margin:0 auto;padding:0 14px}
+  .hidden{display:none !important}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    position:sticky;top:0;z-index:40;background:var(--surface);
+    border-bottom:1px solid var(--border);
+    padding-top:env(safe-area-inset-top);
+  }
+  .topbar-in{display:flex;align-items:center;justify-content:space-between;height:52px}
+  .topbar-title{font-size:19px;font-weight:750;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+  .pill-count{font-size:13px;font-weight:700;color:var(--text-3);background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:1px 9px}
+  .ico{width:38px;height:38px;border-radius:999px;display:flex;align-items:center;justify-content:center;color:var(--text-2)}
+  .ico:active{background:var(--surface-2)}
+  .ico svg{width:21px;height:21px}
+  .topbar-actions{display:flex;align-items:center;gap:2px}
+
+  /* ---------- Tabs ---------- */
+  .tabs{position:sticky;top:calc(52px + env(safe-area-inset-top));z-index:35;background:var(--surface);border-bottom:1px solid var(--border)}
+  .tabs-in{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:9px 0;scrollbar-width:none}
+  .tabs-in::-webkit-scrollbar{display:none}
+  .tab{white-space:nowrap;font-size:14.5px;font-weight:650;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:6px 12px;flex:none}
+  .tab.on{background:var(--text);color:var(--surface);border-color:var(--text)}
+  .seltype{margin-left:10px;border-style:dashed;font-size:14px;font-weight:600;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:6px 8px;outline:none;flex:none;-webkit-appearance:none;appearance:none;text-align:center}
+
+  /* ---------- Feed ---------- */
+  main{padding-top:14px}
+  .banner{background:var(--blue-soft);border:1px solid var(--border);border-radius:14px;padding:11px 14px;font-size:15px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;color:var(--text)}
+
+  .card{
+    position:relative;background:var(--surface);border:1px solid var(--border);
+    border-radius:16px;margin-bottom:12px;box-shadow:var(--shadow);
+    overflow:hidden;transition:transform .18s ease,opacity .18s ease,margin .18s ease,max-height .18s ease;
+  }
+  .card.gone{opacity:0;transform:scale(.97);max-height:0;margin-bottom:0;border-width:0}
+  .card-body{padding:14px 15px 10px}
+  .meta{display:flex;align-items:center;gap:7px;font-size:14px;color:var(--text-3);margin-bottom:7px;flex-wrap:wrap}
+  .meta .src{font-weight:700;color:var(--text-2)}
+  .meta .dot{opacity:.5}
+  .score{margin-left:auto;font-size:13px;font-weight:750;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:2px 8px;white-space:nowrap}
+  .score.mid{color:var(--text-3);background:var(--surface-2)}
+  .row{display:flex;gap:13px;align-items:flex-start}
+  .col{flex:1;min-width:0}
+  h2.title{margin:0;font-size:19.5px;line-height:1.28;font-weight:730;letter-spacing:-.011em}
+  .excerpt{cursor:pointer;margin:6px 0 0;font-size:15.5px;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .thumb{width:92px;height:92px;border-radius:11px;object-fit:cover;background:var(--surface-2);flex:none}
+  .hero{display:block;position:relative;aspect-ratio:16/9;background:#000}
+  .hero img{width:100%;height:100%;object-fit:cover;display:block}
+  .hero .play{position:absolute;right:9px;bottom:9px;background:rgba(0,0,0,.78);color:#fff;font-size:12.5px;font-weight:700;border-radius:6px;padding:2px 7px}
+  .why{margin:10px 0 0;font-size:15px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border-2);border-radius:11px;padding:9px 11px}
+  .sum{margin-top:10px;font-size:15.5px;color:var(--text-2);border-top:1px solid var(--border-2);padding-top:10px}
+  .sum ul{margin:8px 0 0;padding-left:18px}
+  .sum li{margin-bottom:4px}
+
+  .actions{display:flex;align-items:center;gap:6px;margin-top:11px;border-top:1px solid var(--border-2);padding-top:9px}
+  .act{display:flex;align-items:center;gap:5px;white-space:nowrap;flex:none;font-size:14.5px;font-weight:650;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:0 11px;height:40px}
+  .act:active{background:var(--border-2)}
+  .act.primary{color:var(--accent);background:var(--accent-soft);border-color:transparent;font-weight:750}
+  .act.on{color:var(--blue);background:var(--blue-soft);border-color:transparent}
+  .act.icon-only{padding:0 11px;font-size:17px}
+  .act.right{margin-left:auto;color:var(--blue);background:transparent;border-color:transparent;padding:0 6px;font-size:18px}
+
+  /* swipe hints */
+  .card .rail{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:14px;font-weight:750;pointer-events:none;opacity:0;transition:opacity .1s}
+  .card .rail .l{color:var(--blue)} .card .rail .r{color:var(--accent)}
+  .card .surface{position:relative;background:var(--surface);transition:transform .15s ease}
+
+  /* ---------- Batch footer ---------- */
+  .batchend{text-align:center;padding:28px 8px 8px;color:var(--text-3)}
+  .batchend p{margin:0 0 16px;font-size:16.5px;line-height:1.5}
+  .btn-wide{display:block;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:15px;font-size:16.5px;font-weight:700;color:var(--text);box-shadow:var(--shadow)}
+  .btn-wide:active{background:var(--surface-2)}
+  .btn-wide.accent{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+
+  .empty{text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 22px}
+  .empty h3{margin:10px 0 6px;font-size:19px}
+  .empty p{margin:0 0 16px;color:var(--text-2);font-size:15.5px}
+  .skel{height:112px;background:var(--surface);border:1px solid var(--border);border-radius:16px;margin-bottom:12px;position:relative;overflow:hidden}
+  .skel::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(125,132,143,.12),transparent);animation:sh 1.2s infinite}
+  @keyframes sh{to{transform:translateX(100%)}}
+
+  /* ---------- Sources ---------- */
+  .searchbox{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:16px;color:var(--text);outline:none;margin-bottom:12px}
+  .grp{font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);padding:14px 4px 7px}
+  .srclist{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .srcrow{display:flex;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid var(--border-2)}
+  .srcrow:last-child{border-bottom:none}
+  .srcrow .nm{flex:1;min-width:0}
+  .srcrow .nm b{display:block;font-size:15.5px;font-weight:680;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .srcrow .nm span{display:block;font-size:13px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* ---------- Bottom nav ---------- */
+  .bnav{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom)}
+  .bnav-in{display:flex;align-items:center;justify-content:space-around;height:60px;max-width:720px;margin:0 auto}
+  .bitem{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;font-weight:650;color:var(--text-3);flex:1;padding:6px 0}
+  .bitem svg{width:23px;height:23px}
+  .bitem.on{color:var(--accent)}
+
+  /* ---------- Modals / toast ---------- */
+  .modal{position:fixed;inset:0;z-index:60;background:rgba(9,12,17,.55);display:flex;align-items:flex-end;justify-content:center}
+  @media(min-width:640px){.modal{align-items:center;padding:16px}}
+  .sheet{background:var(--surface);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:18px 18px calc(20px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto}
+  @media(min-width:640px){.sheet{border-radius:18px;padding-bottom:20px}}
+  .sheet h3{margin:0 0 14px;font-size:18px;font-weight:750;display:flex;align-items:center;justify-content:space-between}
+  .field{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px 13px;font-size:16px;color:var(--text);outline:none;font-family:inherit}
+  .lbl{display:block;font-size:14.5px;font-weight:650;color:var(--text-2);margin:14px 0 6px}
+  .btn{width:100%;background:var(--accent);color:#fff;font-weight:750;font-size:16px;border-radius:12px;padding:13px;margin-top:12px}
+  @media (prefers-color-scheme: dark){.btn{color:#0f1115}}
+  .btn.sec{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;font-size:13.5px}
+  .chip{background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:4px 10px;color:var(--text-2)}
+  .rateopts{display:flex;gap:8px}
+  .rateopt{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px 6px;text-align:center;font-size:13px;font-weight:650;color:var(--text-2)}
+  .rateopt .em{display:block;font-size:22px;margin-bottom:3px}
+  .rateopt.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue)}
+  #toast{visibility:hidden;opacity:0;pointer-events:none;position:fixed;left:14px;right:14px;bottom:calc(74px + env(safe-area-inset-bottom));z-index:70;background:var(--text);color:var(--surface);border-radius:13px;padding:13px 15px;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:520px;margin:0 auto;transform:translateY(140%);transition:transform .22s cubic-bezier(.2,.8,.3,1),opacity .18s ease,visibility .18s}
+  #toast.up{visibility:visible;opacity:1;pointer-events:auto;transform:translateY(0)}
+  #toast button{font-weight:800;color:var(--surface);text-decoration:underline;white-space:nowrap}
+</style>
 </head>
-<body class="font-sans min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
+<body>
 
-  <!-- Top Navigation Bar -->
-  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-slate-200 px-4 py-2.5 shadow-sm">
-    <div class="max-w-2xl mx-auto flex items-center justify-between">
-      <div class="flex items-center space-x-2">
-        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/20">
-          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-        </div>
-        <div>
-          <h1 class="text-xl font-extrabold tracking-tight text-slate-900">FocusFeed</h1>
-        </div>
-      </div>
-
-      <!-- Actions -->
-      <div class="flex items-center space-x-2">
-        <button onclick="syncAllBatches()" id="sync-btn" title="Sincronizar feeds" class="px-2.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center gap-1 text-slate-700 border border-slate-200 text-lg font-semibold transition whitespace-nowrap">
-          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          <span class="hidden sm:inline">Sincronizar</span>
-        </button>
-        <button onclick="openModal('modal-add')" title="Agregar canal o OPML" class="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-600/30 transition">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-        </button>
-      </div>
-    </div>
-  </header>
-
-  <!-- Filter & Segment Tabs -->
-  <section id="filter-section" class="sticky top-[53px] z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-2">
-    <div class="max-w-2xl mx-auto flex items-center justify-between gap-2 overflow-x-auto custom-scrollbar">
-      <div class="flex items-center space-x-1.5 text-lg font-semibold shrink-0">
-        <button onclick="setTab('curated')" id="tab-curated" class="px-3.5 py-1.5 rounded-full bg-slate-900 text-white font-bold flex items-center gap-1.5 shadow-sm transition whitespace-nowrap">
-          <span>✦</span> Para ti (IA)
-        </button>
-        <button onclick="setTab('reading')" id="tab-reading" class="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1 whitespace-nowrap">
-          <span>🔖</span> Guardados (<span id="count-reading">0</span>)
-        </button>
-        <button onclick="setTab('inbox')" id="tab-inbox" class="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1 whitespace-nowrap">
-          <span>📥</span> Todo
-        </button>
-        <button onclick="setTab('sources')" id="tab-sources" class="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1 whitespace-nowrap">
-          <span>📡</span> Fuentes (<span id="count-sources">0</span>)
-        </button>
-      </div>
-
-      <select id="filter-type" onchange="loadItems()" class="bg-slate-100 text-slate-700 text-lg rounded-full px-2.5 py-1.5 border border-slate-200 outline-none shrink-0 font-medium">
-        <option value="all">Todo tipo</option>
-        <option value="video">Videos</option>
-        <option value="article">Artículos</option>
-      </select>
-    </div>
-  </section>
-
-  <!-- Main Container -->
-  <main class="flex-1 max-w-2xl w-full mx-auto px-4 py-4 space-y-4">
-    <!-- Progress banner during syncing -->
-    <div id="sync-progress-banner" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-3 text-base text-blue-900 flex items-center justify-between shadow-sm">
-      <div class="flex items-center space-x-2">
-        <span class="animate-spin text-blue-600 font-bold">↻</span>
-        <span id="sync-progress-text">Sincronizando canales...</span>
-      </div>
-      <span id="sync-progress-count" class="font-bold text-blue-700">0/102</span>
-    </div>
-
-    <!-- Active Topics Header -->
-    <div id="topics-banner" class="bg-white border border-blue-100 rounded-2xl p-3.5 flex items-center justify-between text-lg shadow-sm">
-      <div class="flex items-center space-x-2.5">
-        <span class="text-blue-600 text-xl">🧠</span>
-        <div>
-          <span class="font-bold text-slate-900">Curación con Aprendizaje Activo</span>
-          <span id="learning-summary" class="text-slate-500 text-base block">Ponderando según tus calificaciones con ❤️ o 👎.</span>
-        </div>
-      </div>
-      <button onclick="openModal('modal-learned')" class="text-blue-600 hover:text-blue-700 font-semibold text-base shrink-0 ml-2 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 whitespace-nowrap">
-        Ver perfil
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <div class="topbar-title"><span id="view-title">Hoy</span><span id="unread-pill" class="pill-count hidden">0</span><span id="dev-user-pill" class="pill-count hidden"></span></div>
+    <div class="topbar-actions">
+      <button class="ico" data-act="markall" title="Marcar todo como leído">
+        <svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
       </button>
-    </div>
-
-    <!-- Feed Items Container -->
-    <div id="items-list" class="space-y-4">
-      <div class="text-center py-16 text-slate-400 text-base">Cargando contenido...</div>
-    </div>
-
-    <!-- Sources / Canales View Container -->
-    <div id="sources-list" class="hidden space-y-4">
-      <!-- Grouped Feeds Rendered Here -->
-    </div>
-  </main>
-
-  <!-- Bottom Navigation Bar -->
-  <footer class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-2xl border-t border-slate-200 bottom-nav-safe shadow-lg">
-    <div class="max-w-2xl mx-auto flex items-center justify-around py-2 text-base font-semibold text-slate-500">
-      <button onclick="setTab('curated')" id="bnav-curated" class="flex flex-col items-center gap-1 text-blue-600">
-        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
-        <span>Para ti</span>
+      <button class="ico" data-act="sync" id="sync-ico" title="Sincronizar">
+        <svg fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
       </button>
-      <button onclick="setTab('reading')" id="bnav-reading" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
-        <span>Guardados</span>
+      <button class="ico" data-act="open-add" title="Agregar fuente">
+        <svg fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
       </button>
-      <button onclick="setTab('sources')" id="bnav-sources" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-        <span>Fuentes</span>
-      </button>
-      <button onclick="openModal('modal-learned')" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-        <span>IA & Gustos</span>
-      </button>
-    </div>
-  </footer>
-
-  <!-- Modal: Calificar / Feedback -->
-  <div id="modal-feedback" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-white border border-slate-200 rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-          <span>⭐</span> Calificar y Entrenar Curador IA
-        </h3>
-        <button onclick="closeModal('modal-feedback')" class="p-1 text-slate-400 hover:text-slate-600">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-        </button>
-      </div>
-
-      <div class="space-y-3 text-base">
-        <div>
-          <p id="feedback-item-title" class="font-bold text-slate-800 text-base line-clamp-1 mb-2">Título</p>
-          <div class="flex items-center justify-around bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-            <button onclick="selectQuickRating('love')" id="rate-btn-love" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
-              <span class="text-2xl">❤️</span>
-              <span class="text-sm font-semibold text-slate-700">Me encanta</span>
-            </button>
-            <button onclick="selectQuickRating('like')" id="rate-btn-like" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
-              <span class="text-2xl">👍</span>
-              <span class="text-sm font-semibold text-slate-700">Relevante</span>
-            </button>
-            <button onclick="selectQuickRating('dislike')" id="rate-btn-dislike" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
-              <span class="text-2xl">👎</span>
-              <span class="text-sm font-semibold text-slate-700">No relevante</span>
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label class="font-semibold text-slate-700 block mb-1">Comentario o Instrucción para la IA:</label>
-          <textarea id="feedback-comment" rows="3" placeholder="Ej: Me interesan más análisis técnicos, menos noticias del día..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 text-base outline-none focus:border-blue-500 focus:bg-white"></textarea>
-        </div>
-
-        <button onclick="submitItemFeedback()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-base shadow-md shadow-blue-500/20">
-          Guardar y Calibrar IA
-        </button>
-      </div>
     </div>
   </div>
+</header>
 
-  <!-- Modal: Agregar Canales / OPML -->
-  <div id="modal-add" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-          <span>➕</span> Agregar Suscripciones
-        </h3>
-        <button onclick="closeModal('modal-add')" class="p-1 text-slate-400 hover:text-slate-600">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-        </button>
-      </div>
+<nav class="tabs">
+  <div class="wrap tabs-in">
+    <button class="tab on" data-tab="curated">Para ti</button>
+    <button class="tab" data-tab="reading">Guardados <span id="c-reading">0</span></button>
+    <button class="tab" data-tab="inbox">Todo</button>
+    <button class="tab" data-tab="sources">Fuentes <span id="c-sources">0</span></button>
+    <select class="seltype" id="filter-type">
+      <option value="all">Todo tipo</option>
+      <option value="video">Solo videos</option>
+      <option value="article">Solo artículos</option>
+    </select>
+  </div>
+</nav>
 
-      <div class="space-y-3 text-base">
-        <div>
-          <label class="text-slate-700 font-semibold block mb-1">Pega el link de un canal de YouTube, Blog o Substack:</label>
-          <input type="text" id="feed-url-input" placeholder="https://www.youtube.com/@TheVerge o RSS" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 text-base outline-none focus:border-blue-500 focus:bg-white">
+<main class="wrap">
+  <div id="sync-banner" class="banner hidden">
+    <span id="sync-text">Sincronizando canales…</span>
+    <b id="sync-count">0/0</b>
+  </div>
+  <div id="feed"></div>
+  <div id="sources" class="hidden"></div>
+</main>
+
+<footer class="bnav">
+  <div class="bnav-in">
+    <button class="bitem on" data-tab="curated">
+      <svg fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10"/></svg>
+      <span>Para ti</span>
+    </button>
+    <button class="bitem" data-tab="reading">
+      <svg fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+      <span>Guardados</span>
+    </button>
+    <button class="bitem" data-tab="inbox">
+      <svg fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 13h4l2 3h4l2-3h4M4 13l2-7h12l2 7v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5z"/></svg>
+      <span>Todo</span>
+    </button>
+    <button class="bitem" data-act="open-learned">
+      <svg fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3a4 4 0 014 4v1a4 4 0 010 8v1a4 4 0 01-8 0v-1a4 4 0 010-8V7a4 4 0 014-4z"/></svg>
+      <span>IA &amp; Gustos</span>
+    </button>
+  </div>
+</footer>
+
+<!-- Modal feedback -->
+<div id="modal-feedback" class="modal hidden">
+  <div class="sheet">
+    <h3>Calificar y entrenar al curador <button class="ico" data-act="close" data-modal="modal-feedback">✕</button></h3>
+    <p id="fb-title" style="margin:0 0 12px;font-weight:680;font-size:16px"></p>
+    <div class="rateopts">
+      <button class="rateopt" data-rate="love"><span class="em">❤️</span>Me encanta</button>
+      <button class="rateopt" data-rate="like"><span class="em">👍</span>Relevante</button>
+      <button class="rateopt" data-rate="dislike"><span class="em">👎</span>No relevante</button>
+    </div>
+    <label class="lbl">Instrucción para la IA</label>
+    <textarea id="fb-comment" rows="3" class="field" placeholder="Ej: más análisis técnico, menos noticia del día…"></textarea>
+    <button class="btn" data-act="submit-feedback">Guardar y calibrar</button>
+  </div>
+</div>
+
+<!-- Modal add -->
+<div id="modal-add" class="modal hidden">
+  <div class="sheet">
+    <h3>Agregar suscripciones <button class="ico" data-act="close" data-modal="modal-add">✕</button></h3>
+    <label class="lbl">Link de canal de YouTube, blog o Substack</label>
+    <input id="feed-url" class="field" placeholder="https://youtube.com/@canal o RSS">
+    <button class="btn" data-act="add-feed">Agregar canal</button>
+    <label class="lbl">O pega tu archivo OPML (Feedly / YouTube)</label>
+    <textarea id="opml" rows="4" class="field" style="font-family:ui-monospace,monospace;font-size:13px" placeholder="&lt;opml version='1.0'&gt;…"></textarea>
+    <button class="btn sec" data-act="import-opml">Importar todas</button>
+  </div>
+</div>
+
+<!-- Modal IA & Gustos -->
+<div id="modal-learned" class="modal hidden">
+  <div class="sheet">
+    <h3>IA &amp; Gustos <button class="ico" data-act="close" data-modal="modal-learned">✕</button></h3>
+    <div id="db-status" class="chip" style="display:inline-block;margin-bottom:6px">Verificando…</div>
+    <p style="color:var(--text-2);font-size:15px;margin:8px 0 0">Curación con aprendizaje activo: se pondera con tus ❤️ y 👎.</p>
+    <label class="lbl">🏆 Canales con boost</label>
+    <div id="l-authors" class="chips"></div>
+    <label class="lbl">🎯 Temas con más afinidad</label>
+    <div id="l-tags" class="chips"></div>
+    <label class="lbl">📝 Temas base de enfoque</label>
+    <textarea id="l-topics" rows="6" class="field"></textarea>
+    <button class="btn" data-act="save-topics">Actualizar temas</button>
+  </div>
+</div>
+
+<div id="toast"><span id="toast-msg"></span><button id="toast-action" class="hidden"></button></div>
+
+<script>
+const PAGE = 16;
+let currentTab='curated', items=[], feeds=[], rendered=[], fbItemId=null, fbRating='love';
+let syncing=false, enrichRounds=0, undoTimer=null, srcQuery='';
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function relTime(iso){
+  if(!iso) return '';
+  // Las fechas sin zona horaria vienen en UTC desde el backend. Sin la Z,
+  // el navegador las lee como hora local y los items salen en el futuro.
+  let raw=String(iso);
+  if(!/[Zz]|[+-]\d{2}:?\d{2}$/.test(raw) && raw.includes('T')) raw += 'Z';
+  const d=new Date(raw); if(isNaN(d.getTime())) return '';
+  const s=(Date.now()-d.getTime())/1000;
+  if(s<0) return 'ahora';
+  if(s<60) return 'ahora';
+  if(s<3600) return Math.floor(s/60)+'m';
+  if(s<86400) return Math.floor(s/3600)+'h';
+  if(s<604800) return Math.floor(s/86400)+'d';
+  if(s<2419200) return Math.floor(s/604800)+' sem';
+  return d.toLocaleDateString('es-MX',{day:'numeric',month:'short'});
+}
+function clean(t){
+  if(!t) return '';
+  return String(t)
+    .replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]*)\]\([^)]*\)/g,'$1')
+    .replace(/^#{1,6}\s*/gm,'').replace(/\*\*(.*?)\*\*/g,'$1')
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g,'$1').replace(/__(.*?)__/g,'$1')
+    .replace(/(?<!\w)_([^_]+)_(?!\w)/g,'$1').replace(/`([^`]*)`/g,'$1')
+    .replace(/<[^>]+>/g,' ').replace(/\s{2,}/g,' ').trim();
+}
+const GENERIC=new Set(['Autor','Canal de YouTube']);
+function sourceName(it){
+  const f=feeds.find(f=>f.id===it.feed_id);
+  if(it.author && !GENERIC.has(it.author)) return it.author;
+  return f? f.title : (it.author||'Fuente');
+}
+function toast(msg,actionLabel,actionFn){
+  const t=$('#toast'), b=$('#toast-action');
+  $('#toast-msg').textContent=msg;
+  clearTimeout(undoTimer);
+  if(actionLabel){ b.textContent=actionLabel; b.classList.remove('hidden'); b.onclick=()=>{t.classList.remove('up');actionFn&&actionFn();}; }
+  else b.classList.add('hidden');
+  t.classList.add('up');
+  undoTimer=setTimeout(()=>t.classList.remove('up'), actionLabel?5200:2600);
+}
+function openModal(id){$('#'+id).classList.remove('hidden')}
+function closeModal(id){$('#'+id).classList.add('hidden')}
+
+/* ---------------- data ---------------- */
+// Cambio de cuenta solo para desarrollo: ?user=<uuid> permite abrir dos
+// sesiones distintas y comprobar el aislamiento. El servidor ignora esta
+// cabecera cuando Supabase está configurado, así que en producción es inerte.
+const DEV_USER = (()=>{
+  const q=new URLSearchParams(location.search).get('user');
+  if(q){ sessionStorage.setItem('ff_dev_user', q); return q; }
+  return sessionStorage.getItem('ff_dev_user') || '';
+})();
+
+async function api(path,opts){
+  const o = Object.assign({}, opts||{});
+  o.headers = Object.assign({}, o.headers||{});
+  if(DEV_USER) o.headers['X-Dev-User']=DEV_USER;
+  const r=await fetch(path,o);
+  return r.json();
+}
+
+async function loadFeeds(){
+  try{ feeds=await api('/api/feeds')||[]; $('#c-sources').textContent=feeds.length; }catch(e){}
+}
+async function loadItems(keepScroll){
+  const y=window.scrollY;
+  const feed=$('#feed');
+  if(!keepScroll) feed.innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  try{
+    const data=await api(`/api/items?tab=${currentTab}&type=${$('#filter-type').value}&limit=200`);
+    items=data.items||[];
+    const c=data.counts||{};
+    $('#c-reading').textContent=c.reading||0;
+    const unread=(c.inbox||0);
+    $('#unread-pill').textContent=unread;
+    $('#unread-pill').classList.toggle('hidden', currentTab==='sources'||!unread);
+    render();
+    if(keepScroll) window.scrollTo(0,y);
+    if(enrichRounds<3 && items.some(i=>!i.summary_tldr)) enrich();
+  }catch(e){
+    feed.innerHTML=`<div class="empty"><h3>No se pudo cargar</h3><p>${esc(e.message)}</p></div>`;
+  }
+}
+async function enrich(){
+  enrichRounds++;
+  try{
+    const d=await api('/api/items/process-pending',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({limit:10})});
+    if(d.processed>0) loadItems(true);
+  }catch(e){}
+}
+async function loadProfile(){
+  try{
+    const p=await api('/api/profile'), st=await api('/api/status');
+    $('#db-status').textContent = st.is_supabase? '● Supabase conectado' : '● Modo local (SQLite)';
+    const L=p.learned_preferences||{};
+    const a=L.boosted_authors||[];
+    $('#l-authors').innerHTML = a.length? a.map(x=>`<span class="chip">✓ ${esc(x)}</span>`).join('') : '<span class="chip">Aún sin canales calificados</span>';
+    const tg=Object.keys(L.boosted_tags||{});
+    $('#l-tags').innerHTML = tg.length? tg.map(x=>`<span class="chip">★ ${esc(x)}</span>`).join('') : '<span class="chip">Califica con ❤️ lo que te guste</span>';
+    $('#l-topics').value=(p.focus_topics||[]).join('\n');
+  }catch(e){}
+}
+
+/* ---------------- render ---------------- */
+const TITLES={curated:'Hoy',reading:'Guardados',inbox:'Todo',sources:'Fuentes'};
+function setTab(tab){
+  currentTab=tab; enrichRounds=0;
+  $('#view-title').textContent=TITLES[tab]||'Hoy';
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+  document.querySelectorAll('.bitem').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+  const isSrc=tab==='sources';
+  $('#feed').classList.toggle('hidden',isSrc);
+  $('#sources').classList.toggle('hidden',!isSrc);
+  window.scrollTo(0,0);
+  if(isSrc){ $('#unread-pill').classList.add('hidden'); renderSources(); } else loadItems();
+}
+
+function cardHTML(it){
+  const score=it.relevance_score||0;
+  const isVideo=it.content_type==='video';
+  let tk=[]; try{ tk=it.key_takeaways? (typeof it.key_takeaways==='string'? JSON.parse(it.key_takeaways):it.key_takeaways):[] }catch(e){}
+  const saved=it.status==='reading';
+  const thumb=it.thumbnail_url||(it.video_id?`https://i.ytimg.com/vi/${it.video_id}/hqdefault.jpg`:'');
+  const excerpt=clean(it.summary_tldr||it.raw_content||'');
+  const scoreCls=score>=85?'score':'score mid';
+
+  const hero = isVideo && thumb ? `
+    <a class="hero" href="${esc(it.url)}" target="_blank" rel="noopener">
+      <img src="${esc(thumb)}" alt="" loading="lazy">
+      <span class="play">▶ ${esc(relTime(it.published_at))}</span>
+    </a>`:'';
+
+  const sideThumb = (!isVideo && thumb)? `<img class="thumb" src="${esc(thumb)}" alt="" loading="lazy">`:'';
+
+  return `
+  <article class="card" data-id="${it.id}">
+    <div class="rail"><span class="l">🔖 Guardar</span><span class="r">Visto ✓</span></div>
+    <div class="surface">
+      ${hero}
+      <div class="card-body">
+        <div class="meta">
+          <span class="src">${esc(sourceName(it))}</span>
+          <span class="dot">·</span><span>${esc(relTime(it.published_at))}</span>
+          ${score?`<span class="${scoreCls}">✦ ${score}%</span>`:''}
         </div>
-        <button onclick="addSingleFeed()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-base shadow-sm">
-          + Agregar Canal
-        </button>
-
-        <div class="border-t border-slate-200 pt-3 space-y-2">
-          <label class="text-slate-700 font-semibold block">O pega tu archivo OPML (Feedly / YouTube):</label>
-          <textarea id="opml-input" rows="4" placeholder="<opml version='1.0'>...</textarea>" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-mono text-sm text-slate-800 outline-none focus:bg-white"></textarea>
-          <button onclick="importOpml()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-xl transition text-base">
-            Importar todas las suscripciones
-          </button>
+        <div class="row">
+          <div class="col">
+            <h2 class="title"><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)}</a></h2>
+            ${excerpt?`<p class="excerpt" data-act="sum" data-id="${it.id}">${esc(excerpt)}</p>`:''}
+          </div>
+          ${sideThumb}
+        </div>
+        ${it.curator_note?`<p class="why">💡 ${esc(clean(it.curator_note))}</p>`:''}
+        <div class="sum hidden" id="sum-${it.id}">
+          ${excerpt?`<p style="margin:0">${esc(excerpt)}</p>`:''}
+          ${tk.length?`<ul>${tk.map(t=>`<li>${esc(clean(t))}</li>`).join('')}</ul>`:''}
+        </div>
+        <div class="actions">
+          <button class="act primary" data-act="read" data-id="${it.id}">✓ Visto</button>
+          <button class="act ${saved?'on':''}" data-act="save" data-id="${it.id}">${saved?'🔖 Guardado':'🔖 Guardar'}</button>
+          <button class="act icon-only" data-act="love" data-id="${it.id}">${it.user_rating==='love'?'❤️':'🤍'}</button>
+          <button class="act icon-only" data-act="dislike" data-id="${it.id}" style="${it.user_rating==='dislike'?'':'opacity:.45'}">👎</button>
+          ${(excerpt||tk.length)?`<button class="act right" data-act="sum" data-id="${it.id}" aria-label="Resumen">▾</button>`:''}
         </div>
       </div>
     </div>
-  </div>
+  </article>`;
+}
 
-  <!-- Modal: Preferencias IA -->
-  <div id="modal-learned" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar">
-      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-          <span>🧠</span> Preferencias Aprendidas por la IA
-        </h3>
-        <button onclick="closeModal('modal-learned')" class="p-1 text-slate-400 hover:text-slate-600">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-        </button>
-      </div>
+function render(){
+  const feed=$('#feed');
+  if(!items.length){
+    feed.innerHTML=`<div class="empty"><div style="font-size:34px">🌿</div><h3>${currentTab==='reading'?'Nada guardado todavía':'Todo al día'}</h3>
+      <p>${currentTab==='reading'?'Usa 🔖 Guardar en cualquier tarjeta o desliza a la derecha.':'Tienes '+feeds.length+' fuentes conectadas. Sincroniza para traer lo más reciente.'}</p>
+      ${currentTab==='reading'?'':'<button class="btn-wide accent" data-act="sync">⚡ Sincronizar ahora</button>'}</div>`;
+    rendered=[];
+    return;
+  }
+  const batch=items.slice(0,PAGE);
+  rendered=batch.map(i=>i.id);
+  const sources=new Set(batch.map(i=>sourceName(i))).size;
+  const more=items.length-batch.length;
+  feed.innerHTML = batch.map(cardHTML).join('') + `
+    <div class="batchend">
+      <p>Revisaste ${batch.length} ${batch.length===1?'artículo':'artículos'} de ${sources} ${sources===1?'fuente':'fuentes'}${more?`.<br>Quedan ${more} en cola.`:'.'}</p>
+      <button class="btn-wide" data-act="markall">Marcar todo como leído</button>
+    </div>`;
+  attachSwipe();
+}
 
-      <div class="space-y-4 text-base">
-        <div id="db-status-pill" class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600 font-mono">
-          Verificando estado de Supabase...
-        </div>
+function renderSources(){
+  const el=$('#sources');
+  if(!feeds.length){
+    el.innerHTML=`<div class="empty"><div style="font-size:34px">📡</div><h3>Sin canales</h3><p>Pega tu OPML de Feedly o la URL de un canal.</p><button class="btn-wide accent" data-act="open-add">+ Agregar fuentes</button></div>`;
+    return;
+  }
+  const q=srcQuery.toLowerCase();
+  const list=feeds.filter(f=>!q||(f.title||'').toLowerCase().includes(q)||(f.custom_category||'').toLowerCase().includes(q));
+  const cats={};
+  list.forEach(f=>{ const c=f.custom_category||'General'; (cats[c]=cats[c]||[]).push(f); });
+  let html=`<input class="searchbox" id="src-search" placeholder="Buscar entre tus ${feeds.length} fuentes…" value="${esc(srcQuery)}">
+    <button class="btn-wide accent" data-act="sync">⚡ Sincronizar todas</button>`;
+  for(const [c,fl] of Object.entries(cats)){
+    html+=`<div class="grp">${esc(c)} · ${fl.length}</div><div class="srclist">`+fl.map(f=>{
+      const ic=f.feed_type==='youtube'?'🎬':(f.feed_type==='substack'?'💌':'📄');
+      return `<div class="srcrow"><span style="font-size:19px">${ic}</span>
+        <div class="nm"><b>${esc(f.title)}</b><span>${esc(f.feed_url)}</span></div>
+        <button class="act icon-only" data-act="sync-one" data-id="${f.id}">↻</button>
+        <button class="act icon-only" data-act="del-feed" data-id="${f.id}">✕</button></div>`;
+    }).join('')+`</div>`;
+  }
+  el.innerHTML=html;
+  const s=$('#src-search');
+  if(s){ s.oninput=e=>{ srcQuery=e.target.value; const pos=e.target.selectionStart; renderSources(); const n=$('#src-search'); n.focus(); n.setSelectionRange(pos,pos); }; }
+}
 
-        <p class="text-slate-600 leading-relaxed">
-          FocusFeed calibra las recomendaciones con tus calificaciones (❤️ / 👎):
-        </p>
-
-        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-          <h4 class="font-bold text-emerald-700 text-base">🏆 Canales con Boost Positivo</h4>
-          <div id="learned-authors-list" class="flex flex-wrap gap-1.5 text-sm"></div>
-        </div>
-
-        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-          <h4 class="font-bold text-blue-700 text-base">🎯 Temas con Mayor Afinidad</h4>
-          <div id="learned-tags-list" class="flex flex-wrap gap-1.5 text-sm"></div>
-        </div>
-
-        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-          <h4 class="font-bold text-slate-800 text-base">📝 Temas Base de Enfoque</h4>
-          <textarea id="edit-focus-topics" rows="4" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 text-base outline-none focus:border-blue-500"></textarea>
-          <button onclick="saveTopicsFromModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-xl text-base">
-            Actualizar Temas
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast -->
-  <div id="toast" class="fixed top-5 right-5 z-50 bg-slate-900 text-white text-base px-4 py-2.5 rounded-full shadow-2xl transform -translate-y-16 opacity-0 transition duration-200 flex items-center gap-2">
-    <span id="toast-icon">✓</span>
-    <span id="toast-msg">Mensaje</span>
-  </div>
-
-  <script>
-    let currentTab = 'curated';
-    let cachedItems = [];
-    let cachedFeeds = [];
-    let activeFeedbackItemId = null;
-    let selectedRating = 'love';
-    let isSyncing = false;
-    let pendingEnrichRounds = 0;
-
-    async function init() {
-      await loadProfile();
-      await loadFeeds();
-      await loadItems();
+/* ---------------- acciones ---------------- */
+function removeCard(id){
+  const el=document.querySelector(`.card[data-id="${id}"]`);
+  if(el){ el.classList.add('gone'); setTimeout(()=>el.remove(),190); }
+  items=items.filter(i=>i.id!==id);
+  rendered=rendered.filter(x=>x!==id);
+}
+async function setStatus(id,status){
+  return api(`/api/items/${id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+}
+async function markRead(id){
+  const it=items.find(i=>i.id===id);
+  removeCard(id);
+  await setStatus(id,'archived');
+  toast('Marcado como visto','Deshacer',async()=>{ await setStatus(id,'inbox'); loadItems(true); });
+  if(rendered.length===0) loadItems();
+}
+async function toggleSave(id){
+  const it=items.find(i=>i.id===id); if(!it) return;
+  const next=it.status==='reading'?'inbox':'reading';
+  it.status=next;
+  await setStatus(id,next);
+  const btn=document.querySelector(`.act[data-act="save"][data-id="${id}"]`);
+  if(btn){ btn.textContent=next==='reading'?'🔖 Guardado':'🔖 Guardar'; btn.classList.toggle('on',next==='reading'); }
+  toast(next==='reading'?'Guardado en tu lista':'Quitado de guardados');
+  loadItems(true);
+  if(currentTab==='reading' && next!=='reading') removeCard(id);
+}
+async function rate(id,rating){
+  const it=items.find(i=>i.id===id);
+  if(it) it.user_rating = (it.user_rating===rating)?'none':rating;
+  try{
+    await api(`/api/items/${id}/feedback`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating})});
+    toast(rating==='love'?'Más contenido así ❤️':'Menos contenido así 👎');
+    if(rating==='dislike') removeCard(id);
+    else{
+      const b=document.querySelector(`.act[data-act="love"][data-id="${id}"]`);
+      if(b) b.textContent = it && it.user_rating==='love' ? '❤️':'🤍';
     }
-
-    function showToast(msg, icon = '✓') {
-      const toast = document.getElementById('toast');
-      document.getElementById('toast-msg').innerText = msg;
-      document.getElementById('toast-icon').innerText = icon;
-      toast.classList.remove('-translate-y-16', 'opacity-0');
-      setTimeout(() => {
-        toast.classList.add('-translate-y-16', 'opacity-0');
-      }, 3500);
+    loadProfile();
+  }catch(e){ toast('Error al calificar'); }
+}
+async function markAllRead(){
+  // lo guardado con el marcador no se marca como leido: es una lista aparte
+  const ids=rendered.filter(id=>{ const it=items.find(i=>i.id===id); return !it||it.status!=='reading'; });
+  if(!ids.length){ toast('No hay nada que marcar'); return; }
+  ids.forEach(removeCard);
+  try{
+    await api('/api/items/bulk-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,status:'archived'})});
+    toast(`${ids.length} marcados como leídos`,'Deshacer',async()=>{
+      await api('/api/items/bulk-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,status:'inbox'})});
+      loadItems();
+    });
+  }catch(e){ toast('Error al marcar'); }
+  loadItems();
+}
+function openFeedback(id){
+  const it=items.find(i=>i.id===id); if(!it) return;
+  fbItemId=id; $('#fb-title').textContent=it.title;
+  setRate(it.user_rating&&it.user_rating!=='none'?it.user_rating:'love');
+  $('#fb-comment').value=it.user_feedback_comment||'';
+  openModal('modal-feedback');
+}
+function setRate(r){
+  fbRating=r;
+  document.querySelectorAll('.rateopt').forEach(b=>b.classList.toggle('on',b.dataset.rate===r));
+}
+async function submitFeedback(){
+  if(!fbItemId) return;
+  await api(`/api/items/${fbItemId}/feedback`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating:fbRating,comment:$('#fb-comment').value.trim()})});
+  closeModal('modal-feedback'); toast('Curador calibrado'); loadItems(true); loadProfile();
+}
+async function syncAll(){
+  if(syncing) return; syncing=true;
+  const b=$('#sync-banner'); b.classList.remove('hidden');
+  $('#sync-ico').style.opacity=.4;
+  let offset=0, total=feeds.length||1, added=0;
+  try{
+    while(true){
+      $('#sync-text').textContent=`Sincronizando ${offset+1}–${Math.min(offset+15,total)}…`;
+      $('#sync-count').textContent=`${offset}/${total}`;
+      const d=await api('/api/feeds/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({offset,limit:15})});
+      added+=d.new_items||0; total=d.total_feeds||total;
+      if(!d.has_more||d.batch_size===0) break;
+      offset+=15;
     }
+    toast(`Sincronizado · ${added} nuevos`);
+    await loadFeeds(); await loadItems();
+  }catch(e){ toast('Error al sincronizar'); }
+  finally{ syncing=false; b.classList.add('hidden'); $('#sync-ico').style.opacity=1; }
+}
 
-    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
-    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+/* ---------------- swipe ---------------- */
+function attachSwipe(){
+  document.querySelectorAll('.card').forEach(card=>{
+    const surf=card.querySelector('.surface'), rail=card.querySelector('.rail');
+    let x0=0,y0=0,dx=0,active=false,decided=false;
+    card.addEventListener('touchstart',e=>{ const t=e.touches[0]; x0=t.clientX; y0=t.clientY; dx=0; active=true; decided=false; surf.style.transition='none'; },{passive:true});
+    card.addEventListener('touchmove',e=>{
+      if(!active) return;
+      const t=e.touches[0], ddx=t.clientX-x0, ddy=t.clientY-y0;
+      if(!decided){ if(Math.abs(ddy)>Math.abs(ddx)){ active=false; return; } decided=Math.abs(ddx)>10; }
+      if(!decided) return;
+      dx=ddx; surf.style.transform=`translateX(${dx}px)`;
+      rail.style.opacity=Math.min(Math.abs(dx)/90,1);
+    },{passive:true});
+    card.addEventListener('touchend',()=>{
+      if(!active){ return; }
+      active=false; surf.style.transition=''; surf.style.transform=''; rail.style.opacity=0;
+      const id=+card.dataset.id;
+      if(dx<-90) markRead(id);
+      else if(dx>90) toggleSave(id);
+    });
+  });
+}
 
-    function setTab(tab) {
-      currentTab = tab;
-      if (tab === 'inbox') {
-        pendingEnrichRounds = 0;
-      }
+/* ---------------- delegación de eventos ---------------- */
+document.addEventListener('click',async e=>{
+  const tabBtn=e.target.closest('[data-tab]');
+  if(tabBtn){ setTab(tabBtn.dataset.tab); return; }
+  const el=e.target.closest('[data-act]'); if(!el) return;
+  const id=+el.dataset.id, act=el.dataset.act;
+  if(act==='read') markRead(id);
+  else if(act==='save') toggleSave(id);
+  else if(act==='love') rate(id,'love');
+  else if(act==='dislike') rate(id,'dislike');
+  else if(act==='sum'){ const s=$('#sum-'+id); s.classList.toggle('hidden'); const b=document.querySelector(`.act.right[data-id="${id}"]`); if(b) b.textContent=s.classList.contains('hidden')?'▾':'▴'; }
+  else if(act==='markall') markAllRead();
+  else if(act==='sync') syncAll();
+  else if(act==='open-add') openModal('modal-add');
+  else if(act==='open-learned'){ loadProfile(); openModal('modal-learned'); }
+  else if(act==='close') closeModal(el.dataset.modal);
+  else if(act==='submit-feedback') submitFeedback();
+  else if(act==='save-topics'){
+    const topics=$('#l-topics').value.split('\n').map(t=>t.trim()).filter(Boolean);
+    await api('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({focus_topics:topics})});
+    closeModal('modal-learned'); toast('Temas actualizados'); loadItems();
+  }
+  else if(act==='add-feed'){
+    const url=$('#feed-url').value.trim(); if(!url) return;
+    toast('Conectando canal…');
+    const d=await api('/api/feeds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    if(d.status==='success'){ $('#feed-url').value=''; closeModal('modal-add'); toast(`Canal agregado (+${d.new_items||0})`); await loadFeeds(); loadItems(); }
+    else toast('Error: '+(d.message||'no se pudo agregar'));
+  }
+  else if(act==='import-opml'){
+    const text=$('#opml').value.trim(); if(!text) return;
+    toast('Importando…');
+    const d=await api('/api/feeds/import-opml',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({opml:text})});
+    if(d.status==='success'){ $('#opml').value=''; closeModal('modal-add'); toast(`${d.imported_count} fuentes importadas`); await loadFeeds(); syncAll(); }
+    else toast('Error al importar');
+  }
+  else if(act==='sync-one'){
+    const f=feeds.find(x=>x.id===id); if(!f) return;
+    toast('Sincronizando '+f.title+'…');
+    const d=await api('/api/feeds/sync-single',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({feed_id:f.id,feed_url:f.feed_url,feed_type:f.feed_type})});
+    toast(`+${d.new_items||0} nuevos`);
+  }
+  else if(act==='del-feed'){
+    const f=feeds.find(x=>x.id===id); if(!f) return;
+    if(!confirm(`¿Eliminar ${f.title}?`)) return;
+    await api('/api/feeds/'+id,{method:'DELETE'});
+    await loadFeeds(); renderSources(); toast('Fuente eliminada');
+  }
+});
+document.addEventListener('click',e=>{ const r=e.target.closest('.rateopt'); if(r) setRate(r.dataset.rate); });
+document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{ if(e.target===m) m.classList.add('hidden'); }));
+$('#filter-type').addEventListener('change',()=>loadItems());
 
-      const isSources = (tab === 'sources');
-      document.getElementById('items-list').classList.toggle('hidden', isSources);
-      document.getElementById('sources-list').classList.toggle('hidden', !isSources);
-      document.getElementById('topics-banner').classList.toggle('hidden', isSources);
+if(DEV_USER){
+  const pill=$('#dev-user-pill');
+  pill.textContent='dev · '+DEV_USER.slice(0,8);
+  pill.classList.remove('hidden');
+}
 
-      ['curated', 'reading', 'inbox', 'sources'].forEach(t => {
-        const btn = document.getElementById(`tab-${t}`);
-        if (!btn) return;
-        if (t === tab) {
-          btn.className = "px-3.5 py-1.5 rounded-full bg-slate-900 text-white font-bold flex items-center gap-1.5 shadow-sm transition whitespace-nowrap";
-        } else {
-          btn.className = "px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1 whitespace-nowrap";
-        }
-      });
-
-      ['curated', 'reading', 'sources'].forEach(t => {
-        const bbtn = document.getElementById(`bnav-${t}`);
-        if (bbtn) {
-          bbtn.className = (t === tab) ? "flex flex-col items-center gap-1 text-blue-600" : "flex flex-col items-center gap-1 hover:text-slate-900 transition";
-        }
-      });
-
-      if (isSources) {
-        renderSourcesView();
-      } else {
-        loadItems();
-      }
-    }
-
-    async function loadItems() {
-      const typeFilter = document.getElementById('filter-type').value;
-      const listEl = document.getElementById('items-list');
-      listEl.innerHTML = '<div class="text-center py-16 text-slate-400 text-base">Cargando tu feed curado...</div>';
-
-      try {
-        const res = await fetch(`/api/items?tab=${currentTab}&type=${typeFilter}`);
-        const data = await res.json();
-        cachedItems = data.items || [];
-
-        if (data.counts) {
-          document.getElementById('count-reading').innerText = data.counts.reading || 0;
-        }
-
-        renderFeed(cachedItems);
-
-        if (currentTab === 'inbox') {
-          triggerPendingEnrichment();
-        }
-      } catch (err) {
-        listEl.innerHTML = `<div class="text-center py-8 text-red-500 text-base">Error: ${err.message}</div>`;
-      }
-    }
-
-    async function triggerPendingEnrichment() {
-      if (currentTab !== 'inbox' || pendingEnrichRounds >= 3) return;
-      pendingEnrichRounds++;
-      try {
-        const res = await fetch('/api/items/process-pending', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ limit: 10 })
-        });
-        const data = await res.json();
-        if (data.status === 'success' && data.processed > 0 && currentTab === 'inbox') {
-          await loadItems();
-        }
-      } catch (err) {
-        console.error('No se pudo analizar items pendientes:', err);
-      }
-    }
-
-    async function loadFeeds() {
-      try {
-        const res = await fetch('/api/feeds');
-        cachedFeeds = await res.json();
-        document.getElementById('count-sources').innerText = cachedFeeds.length || 0;
-        if (currentTab === 'sources') {
-          renderSourcesView();
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    function renderSourcesView() {
-      const sourcesEl = document.getElementById('sources-list');
-      if (!cachedFeeds || cachedFeeds.length === 0) {
-        sourcesEl.innerHTML = `
-          <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6 space-y-3 shadow-sm">
-            <div class="text-3xl">📡</div>
-            <h3 class="text-lg font-bold text-slate-900">No hay canales registrados</h3>
-            <p class="text-base text-slate-500 max-w-sm mx-auto">Pega tu archivo OPML de Feedly o la URL de un canal con el botón (+).</p>
-            <button onclick="openModal('modal-add')" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-base font-bold shadow-md shadow-blue-500/20">
-              + Agregar Canales
-            </button>
-          </div>
-        `;
-        return;
-      }
-
-      const categories = {};
-      cachedFeeds.forEach(f => {
-        const cat = f.custom_category || 'General';
-        if (!categories[cat]) categories[cat] = [];
-        categories[cat].push(f);
-      });
-
-      let html = `
-        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <h2 class="text-lg font-bold text-slate-900">Tus ${cachedFeeds.length} Canales y Fuentes</h2>
-            <p class="text-base text-slate-500">Guardados en tu base de datos permanente en Supabase</p>
-          </div>
-          <button onclick="syncAllBatches()" class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-base font-bold transition shadow-sm">
-            ⚡ Sincronizar todos
-          </button>
-        </div>
-      `;
-
-      for (const [catName, fList] of Object.entries(categories)) {
-        html += `
-          <div class="space-y-2">
-            <div class="flex items-center justify-between px-1">
-              <h3 class="text-base font-bold text-blue-600 uppercase tracking-wider">${catName}</h3>
-              <span class="text-sm font-semibold text-slate-400">${fList.length} fuentes</span>
-            </div>
-            <div class="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 shadow-sm overflow-hidden">
-              ${fList.map(f => {
-                const isYt = f.feed_type === 'youtube';
-                const icon = isYt ? '🎬' : (f.feed_type === 'substack' ? '💌' : '📄');
-                return `
-                  <div class="p-3.5 flex items-center justify-between hover:bg-slate-50/80 transition text-base">
-                    <div class="flex items-center space-x-2.5 overflow-hidden">
-                      <span class="text-lg shrink-0">${icon}</span>
-                      <div class="truncate">
-                        <div class="font-bold text-slate-900 truncate">${f.title}</div>
-                        <div class="text-sm text-slate-400 truncate max-w-xs">${f.feed_url}</div>
-                      </div>
-                    </div>
-
-                    <div class="flex items-center space-x-1.5 shrink-0 ml-2">
-                      <button onclick="syncSingleFeed(${f.id}, '${f.feed_url}', '${f.feed_type}')" title="Cargar artículos de este canal" class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-base font-medium">
-                        ↻
-                      </button>
-                      <button onclick="deleteFeed(${f.id})" title="Eliminar canal" class="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 text-base">
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          </div>
-        `;
-      }
-
-      sourcesEl.innerHTML = html;
-    }
-
-    const GENERIC_AUTHOR_PLACEHOLDERS = new Set(['Autor', 'Canal de YouTube']);
-    const PLATFORM_META = {
-      youtube: { label: 'YouTube', icon: '▶' },
-      substack: { label: 'Substack', icon: '📝' },
-      rss: { label: 'Web', icon: '🌐' },
-    };
-
-    function stripMarkdownNoise(text) {
-      if (!text) return '';
-      return text
-        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-        .replace(/^#{1,6}\s*/gm, '')
-        .replace(/\*\*(.*?)\*\*/g, '$1')
-        .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1')
-        .replace(/__(.*?)__/g, '$1')
-        .replace(/(?<!\w)_([^_]+)_(?!\w)/g, '$1')
-        .replace(/`([^`]*)`/g, '$1')
-        .replace(/\n{2,}/g, ' ')
-        .replace(/\s{2,}/g, ' ')
-        .trim();
-    }
-
-    function resolveSource(item) {
-      const feed = cachedFeeds.find(f => f.id === item.feed_id);
-      const platform = PLATFORM_META[feed && feed.feed_type] || PLATFORM_META.rss;
-      const hasRealAuthor = item.author && !GENERIC_AUTHOR_PLACEHOLDERS.has(item.author);
-      const displayName = hasRealAuthor ? item.author : (feed ? feed.title : (item.author || 'Fuente desconocida'));
-      return { displayName, platform };
-    }
-
-    function renderFeed(items) {
-      const listEl = document.getElementById('items-list');
-      if (!items || items.length === 0) {
-        listEl.innerHTML = `
-          <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6 space-y-3 shadow-sm">
-            <div class="text-3xl">🌿</div>
-            <h3 class="text-lg font-bold text-slate-900">Todo al día en este feed</h3>
-            <p class="text-base text-slate-500 max-w-sm mx-auto">Tienes ${cachedFeeds.length} canales en Supabase. Haz clic abajo para descargar los artículos más recientes.</p>
-            <button onclick="syncAllBatches()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-base font-bold transition shadow-md shadow-blue-500/20">
-              ⚡ Sincronizar Feed Ahora
-            </button>
-          </div>
-        `;
-        return;
-      }
-
-      listEl.innerHTML = items.map((item) => {
-        const score = item.relevance_score || 0;
-        const isVideo = item.content_type === 'video';
-        const takeaways = item.key_takeaways ? (typeof item.key_takeaways === 'string' ? JSON.parse(item.key_takeaways) : item.key_takeaways) : [];
-        const source = resolveSource(item);
-
-        let matchBadge = `<span class="text-base font-bold text-blue-600 flex items-center gap-1 whitespace-nowrap">✦ ${score}% Match</span>`;
-        if (score >= 90) {
-          matchBadge = `<span class="text-base font-bold text-emerald-600 flex items-center gap-1 whitespace-nowrap">✦ ${score}% Top Match</span>`;
-        }
-
-        if (isVideo) {
-          return `
-            <article class="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden transition shadow-sm hover:shadow-md space-y-3 pb-3.5">
-              <a href="${item.url}" target="_blank" class="block relative aspect-video bg-slate-950 group">
-                <img src="${item.thumbnail_url || 'https://i.ytimg.com/vi/' + item.video_id + '/hqdefault.jpg'}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
-                <div class="absolute bottom-2.5 right-2.5 bg-black/80 px-2 py-0.5 rounded-md text-sm font-bold text-white tracking-wide">
-                  ▶ YouTube
-                </div>
-              </a>
-
-              <div class="px-4 space-y-2">
-                <div class="flex items-center justify-between text-lg gap-2 flex-wrap">
-                  <div class="flex items-center gap-1.5 flex-wrap">
-                    <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-base font-semibold">
-                      ${source.platform.icon} ${source.platform.label}
-                    </span>
-                    <span class="font-bold text-slate-800 text-lg break-words">${source.displayName}</span>
-                  </div>
-                  <div class="shrink-0">${matchBadge}</div>
-                </div>
-
-                <h2 class="text-2xl font-bold text-slate-900 leading-snug">
-                  <a href="${item.url}" target="_blank" class="hover:text-blue-600 transition">
-                    ${item.title}
-                  </a>
-                </h2>
-
-                ${item.curator_note ? `
-                  <p class="text-lg text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    💡 <strong>Por qué verlo:</strong> ${stripMarkdownNoise(item.curator_note)}
-                  </p>
-                ` : ''}
-
-                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-lg">
-                  <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
-                    <div class="font-bold text-slate-800 flex items-center gap-1 text-lg">
-                      <span class="text-blue-600">✦</span> Resumen y Puntos Clave
-                    </div>
-                    <button id="toggle-btn-${item.id}" class="text-blue-600 font-bold text-lg">
-                      Desplegar ▾
-                    </button>
-                  </div>
-
-                  <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-slate-200 space-y-2 text-slate-700 leading-relaxed">
-                    <p class="whitespace-pre-line text-lg">${stripMarkdownNoise(item.summary_tldr) || 'Resumen disponible.'}</p>
-                    ${takeaways.length > 0 ? `
-                      <ul class="space-y-1 text-lg text-slate-700 list-disc list-inside pt-1">
-                        ${takeaways.map(t => `<li>${stripMarkdownNoise(t)}</li>`).join('')}
-                      </ul>
-                    ` : ''}
-                  </div>
-                </div>
-
-                <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-lg">
-                  <div class="flex items-center space-x-1">
-                    <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition text-lg">
-                      ${item.user_rating === 'love' ? '❤️' : '🤍'}
-                    </button>
-                    <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-lg ${item.user_rating === 'dislike' ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-0'}">
-                      👎
-                    </button>
-                    <button onclick="openFeedbackModal(${item.id})" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-base font-semibold border border-slate-200 transition whitespace-nowrap">
-                      💬 Calificar
-                    </button>
-                  </div>
-
-                  <div class="flex items-center space-x-2">
-                    <button onclick="updateItemStatus(${item.id}, '${item.status === 'reading' ? 'inbox' : 'reading'}')" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 font-medium whitespace-nowrap">
-                      ${item.status === 'reading' ? '🔖 Guardado' : '🔖 Guardar'}
-                    </button>
-                    <button onclick="updateItemStatus(${item.id}, 'archived')" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 whitespace-nowrap">
-                      ✓ Visto
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </article>
-          `;
-        } else {
-          return `
-            <article class="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-4 sm:p-5 transition shadow-sm hover:shadow-md space-y-3">
-              <div class="flex items-center justify-between text-lg gap-2 flex-wrap">
-                <div class="flex items-center gap-1.5 flex-wrap">
-                  <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-base font-semibold">
-                    ${source.platform.icon} ${source.platform.label}
-                  </span>
-                  <span class="font-bold text-slate-800 text-lg break-words">${source.displayName}</span>
-                </div>
-                <div class="shrink-0">${matchBadge}</div>
-              </div>
-
-              <div>
-                <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 font-serif leading-snug">
-                  <a href="${item.url}" target="_blank" class="hover:text-blue-600 transition">
-                    ${item.title}
-                  </a>
-                </h2>
-                <p class="text-lg text-slate-600 font-sans mt-1.5 line-clamp-2 leading-relaxed">
-                  ${stripMarkdownNoise(item.summary_tldr || item.raw_content)}
-                </p>
-              </div>
-
-              ${item.curator_note ? `
-                <p class="text-lg text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                  💡 <strong>Por qué leerlo:</strong> ${stripMarkdownNoise(item.curator_note)}
-                </p>
-              ` : ''}
-
-              <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-lg">
-                <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
-                  <div class="font-bold text-slate-800 flex items-center gap-1 text-lg">
-                    <span class="text-blue-600">✦</span> Puntos Clave
-                  </div>
-                  <button id="toggle-btn-${item.id}" class="text-blue-600 font-bold text-lg">
-                    Desplegar ▾
-                  </button>
-                </div>
-
-                <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-slate-200 space-y-2 text-slate-700">
-                  ${takeaways.length > 0 ? `
-                    <ul class="space-y-1 text-lg text-slate-700 list-disc list-inside">
-                      ${takeaways.map(t => `<li>${stripMarkdownNoise(t)}</li>`).join('')}
-                    </ul>
-                  ` : ''}
-                </div>
-              </div>
-
-              <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-lg">
-                <div class="flex items-center space-x-1">
-                  <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition text-lg">
-                    ${item.user_rating === 'love' ? '❤️' : '🤍'}
-                  </button>
-                  <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-lg ${item.user_rating === 'dislike' ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-0'}">
-                    👎
-                  </button>
-                  <button onclick="openFeedbackModal(${item.id})" class="px-2 py-1 rounded bg-white text-slate-700 text-base font-semibold border border-slate-200 whitespace-nowrap">
-                    💬 Calificar
-                  </button>
-                </div>
-
-                <div class="flex items-center space-x-2">
-                  <a href="${item.url}" target="_blank" class="text-blue-600 hover:text-blue-700 font-bold whitespace-nowrap">
-                    Leer ↗
-                  </a>
-                  <button onclick="updateItemStatus(${item.id}, 'archived')" class="text-slate-500 hover:text-slate-800 whitespace-nowrap">
-                    ✓ Visto
-                  </button>
-                </div>
-              </div>
-            </article>
-          `;
-        }
-      }).join('');
-    }
-
-    function toggleSummary(id) {
-      const content = document.getElementById(`summary-content-${id}`);
-      const btn = document.getElementById(`toggle-btn-${id}`);
-      if (content.classList.contains('hidden')) {
-        content.classList.remove('hidden');
-        btn.innerText = 'Ocultar ▲';
-      } else {
-        content.classList.add('hidden');
-        btn.innerText = 'Desplegar ▾';
-      }
-    }
-
-    async function quickRate(itemId, rating) {
-      try {
-        const res = await fetch(`/api/items/${itemId}/feedback`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ rating })
-        });
-        const data = await res.json();
-        if (!res.ok || data.status === 'error') {
-          throw new Error(data.message || `HTTP ${res.status}`);
-        }
-        showToast(rating === 'love' ? '¡Guardado! (+Relevancia)' : 'Entendido, reduciremos este contenido');
-        await loadItems();
-        await loadProfile();
-      } catch (err) {
-        showToast('Error al calificar: ' + err.message, '⚠️');
-      }
-    }
-
-    function openFeedbackModal(itemId) {
-      const item = cachedItems.find(i => i.id === itemId);
-      if (!item) return;
-      activeFeedbackItemId = itemId;
-      document.getElementById('feedback-item-title').innerText = item.title;
-      selectQuickRating(item.user_rating || 'love');
-      document.getElementById('feedback-comment').value = item.user_feedback_comment || '';
-      openModal('modal-feedback');
-    }
-
-    function selectQuickRating(rating) {
-      selectedRating = rating;
-      ['love', 'like', 'dislike'].forEach(r => {
-        const btn = document.getElementById(`rate-btn-${r}`);
-        if (r === rating) {
-          btn.className = "px-3 py-2 rounded-lg bg-blue-100 border border-blue-500 flex flex-col items-center gap-1 transition shadow-sm";
-        } else {
-          btn.className = "px-3 py-2 rounded-lg hover:bg-slate-100 border border-transparent flex flex-col items-center gap-1 transition opacity-70";
-        }
-      });
-    }
-
-    async function submitItemFeedback() {
-      if (!activeFeedbackItemId) return;
-      const comment = document.getElementById('feedback-comment').value.trim();
-      try {
-        const res = await fetch(`/api/items/${activeFeedbackItemId}/feedback`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ rating: selectedRating, comment })
-        });
-        const data = await res.json();
-        if (!res.ok || data.status === 'error') {
-          throw new Error(data.message || `HTTP ${res.status}`);
-        }
-        showToast('IA calibrada con tus comentarios ⭐');
-        closeModal('modal-feedback');
-        await loadItems();
-        await loadProfile();
-      } catch (err) {
-        showToast('Error al procesar feedback: ' + err.message, '⚠️');
-      }
-    }
-
-    async function updateItemStatus(id, newStatus) {
-      try {
-        await fetch(`/api/items/${id}/status`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ status: newStatus })
-        });
-        showToast(newStatus === 'archived' ? 'Marcado como visto' : 'Guardado');
-        await loadItems();
-      } catch (err) {
-        showToast('Error al actualizar', '⚠️');
-      }
-    }
-
-    async function syncAllBatches() {
-      if (isSyncing) return;
-      isSyncing = true;
-      
-      const banner = document.getElementById('sync-progress-banner');
-      const progressText = document.getElementById('sync-progress-text');
-      const progressCount = document.getElementById('sync-progress-count');
-      banner.classList.remove('hidden');
-
-      let offset = 0;
-      const limit = 15;
-      let totalFeeds = cachedFeeds.length || 102;
-      let totalNew = 0;
-
-      try {
-        while (true) {
-          progressText.innerText = `Sincronizando canales ${offset + 1} al ${Math.min(offset + limit, totalFeeds)}...`;
-          progressCount.innerText = `${offset}/${totalFeeds}`;
-
-          const res = await fetch('/api/feeds/sync', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ offset, limit })
-          });
-          const data = await res.json();
-          totalNew += data.new_items || 0;
-          totalFeeds = data.total_feeds || totalFeeds;
-
-          if (!data.has_more || data.batch_size === 0) {
-            break;
-          }
-          offset += limit;
-          await loadItems();
-        }
-
-        showToast(`Sincronización completa (+${totalNew} artículos)`, '⚡');
-        await loadItems();
-        await loadFeeds();
-      } catch (err) {
-        showToast('Error durante la sincronización', '⚠️');
-      } finally {
-        isSyncing = false;
-        banner.classList.add('hidden');
-      }
-    }
-
-    async function syncSingleFeed(feedId, feedUrl, feedType) {
-      showToast('Cargando artículos del canal...', '↻');
-      try {
-        const res = await fetch('/api/feeds/sync-single', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ feed_id: feedId, feed_url: feedUrl, feed_type: feedType })
-        });
-        const data = await res.json();
-        showToast(`Canal sincronizado (+${data.new_items || 0} items)`);
-        await loadItems();
-      } catch (err) {
-        showToast('Error al sincronizar canal', '⚠️');
-      }
-    }
-
-    async function deleteFeed(feedId) {
-      if (!confirm('¿Eliminar este canal de tus suscripciones?')) return;
-      try {
-        await fetch(`/api/feeds/${feedId}`, { method: 'DELETE' });
-        showToast('Canal eliminado');
-        await loadFeeds();
-        await loadItems();
-      } catch (err) {
-        showToast('Error al eliminar canal', '⚠️');
-      }
-    }
-
-    async function addSingleFeed() {
-      const url = document.getElementById('feed-url-input').value.trim();
-      if (!url) return;
-      try {
-        showToast('Conectando canal y descargando videos...', '⏳');
-        const res = await fetch('/api/feeds', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ url })
-        });
-        const data = await res.json();
-        if (data.status === 'success') {
-          showToast(`Canal agregado (+${data.new_items || 0} videos)`, '✓');
-          document.getElementById('feed-url-input').value = '';
-          closeModal('modal-add');
-          await loadFeeds();
-          await loadItems();
-        } else {
-          showToast('Error: ' + (data.message || 'No se pudo agregar'), '⚠️');
-        }
-      } catch (err) {
-        showToast('Error al agregar canal: ' + err.message, '⚠️');
-      }
-    }
-
-    async function importOpml() {
-      const text = document.getElementById('opml-input').value.trim();
-      if (!text) return;
-      try {
-        showToast('Procesando e insertando 102 canales...', '⏳');
-        const res = await fetch('/api/feeds/import-opml', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ opml: text })
-        });
-        const data = await res.json();
-        if (data.status === 'success') {
-          const failMsg = data.failed_count ? ` (${data.failed_count} fallaron)` : '';
-          showToast(`¡${data.imported_count} canales guardados en Supabase!${failMsg}`, '✓');
-          document.getElementById('opml-input').value = '';
-          closeModal('modal-add');
-          await loadFeeds();
-          syncAllBatches();
-        } else {
-          showToast('Error: ' + (data.message || 'Fallo al procesar'), '⚠️');
-        }
-      } catch (err) {
-        showToast('Error al importar OPML: ' + err.message, '⚠️');
-      }
-    }
-
-    async function loadProfile() {
-      try {
-        const res = await fetch('/api/profile');
-        const prof = await res.json();
-        const learned = prof.learned_preferences || {};
-        
-        // Debug status check
-        const dbStatus = document.getElementById('db-status-pill');
-        const statusRes = await fetch('/api/status');
-        const statusData = await statusRes.json();
-        if (statusData.is_supabase) {
-          dbStatus.innerHTML = '<span class="text-emerald-600 font-bold">● Supabase Conectado</span> (Persistencia en la nube activa)';
-        } else {
-          dbStatus.innerHTML = '<span class="text-amber-600 font-bold">● Modo Local / SQLite</span> (Revisa las variables de Supabase en Vercel)';
-        }
-
-        const authorsList = document.getElementById('learned-authors-list');
-        const authors = learned.boosted_authors || [];
-        authorsList.innerHTML = authors.map(a => `<span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">✓ ${a}</span>`).join('') || '<span class="text-slate-400">Aún no has calificado autores.</span>';
-
-        const tagsList = document.getElementById('learned-tags-list');
-        const tags = Object.keys(learned.boosted_tags || {});
-        tagsList.innerHTML = tags.map(t => `<span class="px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200">★ ${t}</span>`).join('') || '<span class="text-slate-400">Califica con ❤️ los videos o lecturas que te gusten.</span>';
-
-        document.getElementById('edit-focus-topics').value = (prof.focus_topics || []).join('\n');
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    async function saveTopicsFromModal() {
-      const raw = document.getElementById('edit-focus-topics').value;
-      const topics = raw.split('\n').map(t => t.trim()).filter(Boolean);
-      try {
-        await fetch('/api/profile', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ focus_topics: topics })
-        });
-        showToast('Temas actualizados exitosamente');
-        closeModal('modal-learned');
-        await loadItems();
-      } catch (err) {
-        showToast('Error al guardar', '⚠️');
-      }
-    }
-
-    window.onload = init;
-  </script>
+(async function init(){ await loadFeeds(); await loadItems(); loadProfile(); })();
+</script>
 </body>
 </html>

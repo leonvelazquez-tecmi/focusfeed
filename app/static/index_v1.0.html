@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>FocusFeed</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', '"Plus Jakarta Sans"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+            serif: ['Newsreader', 'Georgia', 'serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      padding-top: max(env(safe-area-inset-top), 10px);
+      padding-bottom: max(env(safe-area-inset-bottom), 76px);
+      -webkit-tap-highlight-color: transparent;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    .custom-scrollbar::-webkit-scrollbar { display: none; }
+    .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .bottom-nav-safe {
+      padding-bottom: max(env(safe-area-inset-bottom), 12px);
+    }
+    .line-clamp-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body class="font-sans min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- Top Navigation Bar -->
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-slate-200 px-4 py-2.5 shadow-sm">
+    <div class="max-w-2xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/20">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </div>
+        <div>
+          <h1 class="text-xl font-extrabold tracking-tight text-slate-900">FocusFeed</h1>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center space-x-2">
+        <button onclick="syncAllBatches()" id="sync-btn" title="Sincronizar feeds" class="px-2.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center gap-1 text-slate-700 border border-slate-200 text-lg font-semibold transition whitespace-nowrap">
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span class="hidden sm:inline">Sincronizar</span>
+        </button>
+        <button onclick="openModal('modal-add')" title="Agregar canal o OPML" class="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-600/30 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Filter & Segment Tabs -->
+  <section id="filter-section" class="sticky top-[53px] z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-2">
+    <div class="max-w-2xl mx-auto flex items-center justify-between gap-2 overflow-x-auto custom-scrollbar">
+      <div class="flex items-center space-x-1.5 text-lg font-semibold shrink-0">
+        <button onclick="setTab('curated')" id="tab-curated" class="px-3.5 py-1.5 rounded-full bg-slate-900 text-white font-bold flex items-center gap-1.5 shadow-sm transition whitespace-nowrap">
+          <span>✦</span> Para ti (IA)
+        </button>
+        <button onclick="setTab('reading')" id="tab-reading" class="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1 whitespace-nowrap">
+          <span>🔖</span> Guardados (<span id="count-reading">0</span>)
+        </button>
+        <button onclick="setTab('inbox')" id="tab-inbox" class="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1 whitespace-nowrap">
+          <span>📥</span> Todo
+        </button>
+        <button onclick="setTab('sources')" id="tab-sources" class="px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1 whitespace-nowrap">
+          <span>📡</span> Fuentes (<span id="count-sources">0</span>)
+        </button>
+      </div>
+
+      <select id="filter-type" onchange="loadItems()" class="bg-slate-100 text-slate-700 text-lg rounded-full px-2.5 py-1.5 border border-slate-200 outline-none shrink-0 font-medium">
+        <option value="all">Todo tipo</option>
+        <option value="video">Videos</option>
+        <option value="article">Artículos</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-2xl w-full mx-auto px-4 py-4 space-y-4">
+    <!-- Progress banner during syncing -->
+    <div id="sync-progress-banner" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-3 text-base text-blue-900 flex items-center justify-between shadow-sm">
+      <div class="flex items-center space-x-2">
+        <span class="animate-spin text-blue-600 font-bold">↻</span>
+        <span id="sync-progress-text">Sincronizando canales...</span>
+      </div>
+      <span id="sync-progress-count" class="font-bold text-blue-700">0/102</span>
+    </div>
+
+    <!-- Active Topics Header -->
+    <div id="topics-banner" class="bg-white border border-blue-100 rounded-2xl p-3.5 flex items-center justify-between text-lg shadow-sm">
+      <div class="flex items-center space-x-2.5">
+        <span class="text-blue-600 text-xl">🧠</span>
+        <div>
+          <span class="font-bold text-slate-900">Curación con Aprendizaje Activo</span>
+          <span id="learning-summary" class="text-slate-500 text-base block">Ponderando según tus calificaciones con ❤️ o 👎.</span>
+        </div>
+      </div>
+      <button onclick="openModal('modal-learned')" class="text-blue-600 hover:text-blue-700 font-semibold text-base shrink-0 ml-2 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 whitespace-nowrap">
+        Ver perfil
+      </button>
+    </div>
+
+    <!-- Feed Items Container -->
+    <div id="items-list" class="space-y-4">
+      <div class="text-center py-16 text-slate-400 text-base">Cargando contenido...</div>
+    </div>
+
+    <!-- Sources / Canales View Container -->
+    <div id="sources-list" class="hidden space-y-4">
+      <!-- Grouped Feeds Rendered Here -->
+    </div>
+  </main>
+
+  <!-- Bottom Navigation Bar -->
+  <footer class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-2xl border-t border-slate-200 bottom-nav-safe shadow-lg">
+    <div class="max-w-2xl mx-auto flex items-center justify-around py-2 text-base font-semibold text-slate-500">
+      <button onclick="setTab('curated')" id="bnav-curated" class="flex flex-col items-center gap-1 text-blue-600">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
+        <span>Para ti</span>
+      </button>
+      <button onclick="setTab('reading')" id="bnav-reading" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+        <span>Guardados</span>
+      </button>
+      <button onclick="setTab('sources')" id="bnav-sources" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        <span>Fuentes</span>
+      </button>
+      <button onclick="openModal('modal-learned')" class="flex flex-col items-center gap-1 hover:text-slate-900 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        <span>IA & Gustos</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- Modal: Calificar / Feedback -->
+  <div id="modal-feedback" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white border border-slate-200 rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <span>⭐</span> Calificar y Entrenar Curador IA
+        </h3>
+        <button onclick="closeModal('modal-feedback')" class="p-1 text-slate-400 hover:text-slate-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-base">
+        <div>
+          <p id="feedback-item-title" class="font-bold text-slate-800 text-base line-clamp-1 mb-2">Título</p>
+          <div class="flex items-center justify-around bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+            <button onclick="selectQuickRating('love')" id="rate-btn-love" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
+              <span class="text-2xl">❤️</span>
+              <span class="text-sm font-semibold text-slate-700">Me encanta</span>
+            </button>
+            <button onclick="selectQuickRating('like')" id="rate-btn-like" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
+              <span class="text-2xl">👍</span>
+              <span class="text-sm font-semibold text-slate-700">Relevante</span>
+            </button>
+            <button onclick="selectQuickRating('dislike')" id="rate-btn-dislike" class="px-3 py-2 rounded-lg hover:bg-white flex flex-col items-center gap-1 transition">
+              <span class="text-2xl">👎</span>
+              <span class="text-sm font-semibold text-slate-700">No relevante</span>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="font-semibold text-slate-700 block mb-1">Comentario o Instrucción para la IA:</label>
+          <textarea id="feedback-comment" rows="3" placeholder="Ej: Me interesan más análisis técnicos, menos noticias del día..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 text-base outline-none focus:border-blue-500 focus:bg-white"></textarea>
+        </div>
+
+        <button onclick="submitItemFeedback()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-base shadow-md shadow-blue-500/20">
+          Guardar y Calibrar IA
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Agregar Canales / OPML -->
+  <div id="modal-add" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <span>➕</span> Agregar Suscripciones
+        </h3>
+        <button onclick="closeModal('modal-add')" class="p-1 text-slate-400 hover:text-slate-600">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-base">
+        <div>
+          <label class="text-slate-700 font-semibold block mb-1">Pega el link de un canal de YouTube, Blog o Substack:</label>
+          <input type="text" id="feed-url-input" placeholder="https://www.youtube.com/@TheVerge o RSS" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 text-base outline-none focus:border-blue-500 focus:bg-white">
+        </div>
+        <button onclick="addSingleFeed()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-base shadow-sm">
+          + Agregar Canal
+        </button>
+
+        <div class="border-t border-slate-200 pt-3 space-y-2">
+          <label class="text-slate-700 font-semibold block">O pega tu archivo OPML (Feedly / YouTube):</label>
+          <textarea id="opml-input" rows="4" placeholder="<opml version='1.0'>...</textarea>" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-mono text-sm text-slate-800 outline-none focus:bg-white"></textarea>
+          <button onclick="importOpml()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-xl transition text-base">
+            Importar todas las suscripciones
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Preferencias IA -->
+  <div id="modal-learned" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <span>🧠</span> Preferencias Aprendidas por la IA
+        </h3>
+        <button onclick="closeModal('modal-learned')" class="p-1 text-slate-400 hover:text-slate-600">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-base">
+        <div id="db-status-pill" class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600 font-mono">
+          Verificando estado de Supabase...
+        </div>
+
+        <p class="text-slate-600 leading-relaxed">
+          FocusFeed calibra las recomendaciones con tus calificaciones (❤️ / 👎):
+        </p>
+
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+          <h4 class="font-bold text-emerald-700 text-base">🏆 Canales con Boost Positivo</h4>
+          <div id="learned-authors-list" class="flex flex-wrap gap-1.5 text-sm"></div>
+        </div>
+
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+          <h4 class="font-bold text-blue-700 text-base">🎯 Temas con Mayor Afinidad</h4>
+          <div id="learned-tags-list" class="flex flex-wrap gap-1.5 text-sm"></div>
+        </div>
+
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+          <h4 class="font-bold text-slate-800 text-base">📝 Temas Base de Enfoque</h4>
+          <textarea id="edit-focus-topics" rows="4" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-800 text-base outline-none focus:border-blue-500"></textarea>
+          <button onclick="saveTopicsFromModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-xl text-base">
+            Actualizar Temas
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed top-5 right-5 z-50 bg-slate-900 text-white text-base px-4 py-2.5 rounded-full shadow-2xl transform -translate-y-16 opacity-0 transition duration-200 flex items-center gap-2">
+    <span id="toast-icon">✓</span>
+    <span id="toast-msg">Mensaje</span>
+  </div>
+
+  <script>
+    let currentTab = 'curated';
+    let cachedItems = [];
+    let cachedFeeds = [];
+    let activeFeedbackItemId = null;
+    let selectedRating = 'love';
+    let isSyncing = false;
+    let pendingEnrichRounds = 0;
+
+    async function init() {
+      await loadProfile();
+      await loadFeeds();
+      await loadItems();
+    }
+
+    function showToast(msg, icon = '✓') {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-msg').innerText = msg;
+      document.getElementById('toast-icon').innerText = icon;
+      toast.classList.remove('-translate-y-16', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('-translate-y-16', 'opacity-0');
+      }, 3500);
+    }
+
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function setTab(tab) {
+      currentTab = tab;
+      if (tab === 'inbox') {
+        pendingEnrichRounds = 0;
+      }
+
+      const isSources = (tab === 'sources');
+      document.getElementById('items-list').classList.toggle('hidden', isSources);
+      document.getElementById('sources-list').classList.toggle('hidden', !isSources);
+      document.getElementById('topics-banner').classList.toggle('hidden', isSources);
+
+      ['curated', 'reading', 'inbox', 'sources'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        if (!btn) return;
+        if (t === tab) {
+          btn.className = "px-3.5 py-1.5 rounded-full bg-slate-900 text-white font-bold flex items-center gap-1.5 shadow-sm transition whitespace-nowrap";
+        } else {
+          btn.className = "px-3.5 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition flex items-center gap-1 whitespace-nowrap";
+        }
+      });
+
+      ['curated', 'reading', 'sources'].forEach(t => {
+        const bbtn = document.getElementById(`bnav-${t}`);
+        if (bbtn) {
+          bbtn.className = (t === tab) ? "flex flex-col items-center gap-1 text-blue-600" : "flex flex-col items-center gap-1 hover:text-slate-900 transition";
+        }
+      });
+
+      if (isSources) {
+        renderSourcesView();
+      } else {
+        loadItems();
+      }
+    }
+
+    async function loadItems() {
+      const typeFilter = document.getElementById('filter-type').value;
+      const listEl = document.getElementById('items-list');
+      listEl.innerHTML = '<div class="text-center py-16 text-slate-400 text-base">Cargando tu feed curado...</div>';
+
+      try {
+        const res = await fetch(`/api/items?tab=${currentTab}&type=${typeFilter}`);
+        const data = await res.json();
+        cachedItems = data.items || [];
+
+        if (data.counts) {
+          document.getElementById('count-reading').innerText = data.counts.reading || 0;
+        }
+
+        renderFeed(cachedItems);
+
+        if (currentTab === 'inbox') {
+          triggerPendingEnrichment();
+        }
+      } catch (err) {
+        listEl.innerHTML = `<div class="text-center py-8 text-red-500 text-base">Error: ${err.message}</div>`;
+      }
+    }
+
+    async function triggerPendingEnrichment() {
+      if (currentTab !== 'inbox' || pendingEnrichRounds >= 3) return;
+      pendingEnrichRounds++;
+      try {
+        const res = await fetch('/api/items/process-pending', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ limit: 10 })
+        });
+        const data = await res.json();
+        if (data.status === 'success' && data.processed > 0 && currentTab === 'inbox') {
+          await loadItems();
+        }
+      } catch (err) {
+        console.error('No se pudo analizar items pendientes:', err);
+      }
+    }
+
+    async function loadFeeds() {
+      try {
+        const res = await fetch('/api/feeds');
+        cachedFeeds = await res.json();
+        document.getElementById('count-sources').innerText = cachedFeeds.length || 0;
+        if (currentTab === 'sources') {
+          renderSourcesView();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function renderSourcesView() {
+      const sourcesEl = document.getElementById('sources-list');
+      if (!cachedFeeds || cachedFeeds.length === 0) {
+        sourcesEl.innerHTML = `
+          <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6 space-y-3 shadow-sm">
+            <div class="text-3xl">📡</div>
+            <h3 class="text-lg font-bold text-slate-900">No hay canales registrados</h3>
+            <p class="text-base text-slate-500 max-w-sm mx-auto">Pega tu archivo OPML de Feedly o la URL de un canal con el botón (+).</p>
+            <button onclick="openModal('modal-add')" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-base font-bold shadow-md shadow-blue-500/20">
+              + Agregar Canales
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      const categories = {};
+      cachedFeeds.forEach(f => {
+        const cat = f.custom_category || 'General';
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push(f);
+      });
+
+      let html = `
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">Tus ${cachedFeeds.length} Canales y Fuentes</h2>
+            <p class="text-base text-slate-500">Guardados en tu base de datos permanente en Supabase</p>
+          </div>
+          <button onclick="syncAllBatches()" class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-base font-bold transition shadow-sm">
+            ⚡ Sincronizar todos
+          </button>
+        </div>
+      `;
+
+      for (const [catName, fList] of Object.entries(categories)) {
+        html += `
+          <div class="space-y-2">
+            <div class="flex items-center justify-between px-1">
+              <h3 class="text-base font-bold text-blue-600 uppercase tracking-wider">${catName}</h3>
+              <span class="text-sm font-semibold text-slate-400">${fList.length} fuentes</span>
+            </div>
+            <div class="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 shadow-sm overflow-hidden">
+              ${fList.map(f => {
+                const isYt = f.feed_type === 'youtube';
+                const icon = isYt ? '🎬' : (f.feed_type === 'substack' ? '💌' : '📄');
+                return `
+                  <div class="p-3.5 flex items-center justify-between hover:bg-slate-50/80 transition text-base">
+                    <div class="flex items-center space-x-2.5 overflow-hidden">
+                      <span class="text-lg shrink-0">${icon}</span>
+                      <div class="truncate">
+                        <div class="font-bold text-slate-900 truncate">${f.title}</div>
+                        <div class="text-sm text-slate-400 truncate max-w-xs">${f.feed_url}</div>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center space-x-1.5 shrink-0 ml-2">
+                      <button onclick="syncSingleFeed(${f.id}, '${f.feed_url}', '${f.feed_type}')" title="Cargar artículos de este canal" class="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-base font-medium">
+                        ↻
+                      </button>
+                      <button onclick="deleteFeed(${f.id})" title="Eliminar canal" class="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 text-base">
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      sourcesEl.innerHTML = html;
+    }
+
+    const GENERIC_AUTHOR_PLACEHOLDERS = new Set(['Autor', 'Canal de YouTube']);
+    const PLATFORM_META = {
+      youtube: { label: 'YouTube', icon: '▶' },
+      substack: { label: 'Substack', icon: '📝' },
+      rss: { label: 'Web', icon: '🌐' },
+    };
+
+    function stripMarkdownNoise(text) {
+      if (!text) return '';
+      return text
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/^#{1,6}\s*/gm, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1')
+        .replace(/__(.*?)__/g, '$1')
+        .replace(/(?<!\w)_([^_]+)_(?!\w)/g, '$1')
+        .replace(/`([^`]*)`/g, '$1')
+        .replace(/\n{2,}/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+
+    function resolveSource(item) {
+      const feed = cachedFeeds.find(f => f.id === item.feed_id);
+      const platform = PLATFORM_META[feed && feed.feed_type] || PLATFORM_META.rss;
+      const hasRealAuthor = item.author && !GENERIC_AUTHOR_PLACEHOLDERS.has(item.author);
+      const displayName = hasRealAuthor ? item.author : (feed ? feed.title : (item.author || 'Fuente desconocida'));
+      return { displayName, platform };
+    }
+
+    function renderFeed(items) {
+      const listEl = document.getElementById('items-list');
+      if (!items || items.length === 0) {
+        listEl.innerHTML = `
+          <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6 space-y-3 shadow-sm">
+            <div class="text-3xl">🌿</div>
+            <h3 class="text-lg font-bold text-slate-900">Todo al día en este feed</h3>
+            <p class="text-base text-slate-500 max-w-sm mx-auto">Tienes ${cachedFeeds.length} canales en Supabase. Haz clic abajo para descargar los artículos más recientes.</p>
+            <button onclick="syncAllBatches()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-base font-bold transition shadow-md shadow-blue-500/20">
+              ⚡ Sincronizar Feed Ahora
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = items.map((item) => {
+        const score = item.relevance_score || 0;
+        const isVideo = item.content_type === 'video';
+        const takeaways = item.key_takeaways ? (typeof item.key_takeaways === 'string' ? JSON.parse(item.key_takeaways) : item.key_takeaways) : [];
+        const source = resolveSource(item);
+
+        let matchBadge = `<span class="text-base font-bold text-blue-600 flex items-center gap-1 whitespace-nowrap">✦ ${score}% Match</span>`;
+        if (score >= 90) {
+          matchBadge = `<span class="text-base font-bold text-emerald-600 flex items-center gap-1 whitespace-nowrap">✦ ${score}% Top Match</span>`;
+        }
+
+        if (isVideo) {
+          return `
+            <article class="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden transition shadow-sm hover:shadow-md space-y-3 pb-3.5">
+              <a href="${item.url}" target="_blank" class="block relative aspect-video bg-slate-950 group">
+                <img src="${item.thumbnail_url || 'https://i.ytimg.com/vi/' + item.video_id + '/hqdefault.jpg'}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                <div class="absolute bottom-2.5 right-2.5 bg-black/80 px-2 py-0.5 rounded-md text-sm font-bold text-white tracking-wide">
+                  ▶ YouTube
+                </div>
+              </a>
+
+              <div class="px-4 space-y-2">
+                <div class="flex items-center justify-between text-lg gap-2 flex-wrap">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-base font-semibold">
+                      ${source.platform.icon} ${source.platform.label}
+                    </span>
+                    <span class="font-bold text-slate-800 text-lg break-words">${source.displayName}</span>
+                  </div>
+                  <div class="shrink-0">${matchBadge}</div>
+                </div>
+
+                <h2 class="text-2xl font-bold text-slate-900 leading-snug">
+                  <a href="${item.url}" target="_blank" class="hover:text-blue-600 transition">
+                    ${item.title}
+                  </a>
+                </h2>
+
+                ${item.curator_note ? `
+                  <p class="text-lg text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    💡 <strong>Por qué verlo:</strong> ${stripMarkdownNoise(item.curator_note)}
+                  </p>
+                ` : ''}
+
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-lg">
+                  <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
+                    <div class="font-bold text-slate-800 flex items-center gap-1 text-lg">
+                      <span class="text-blue-600">✦</span> Resumen y Puntos Clave
+                    </div>
+                    <button id="toggle-btn-${item.id}" class="text-blue-600 font-bold text-lg">
+                      Desplegar ▾
+                    </button>
+                  </div>
+
+                  <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-slate-200 space-y-2 text-slate-700 leading-relaxed">
+                    <p class="whitespace-pre-line text-lg">${stripMarkdownNoise(item.summary_tldr) || 'Resumen disponible.'}</p>
+                    ${takeaways.length > 0 ? `
+                      <ul class="space-y-1 text-lg text-slate-700 list-disc list-inside pt-1">
+                        ${takeaways.map(t => `<li>${stripMarkdownNoise(t)}</li>`).join('')}
+                      </ul>
+                    ` : ''}
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-lg">
+                  <div class="flex items-center space-x-1">
+                    <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition text-lg">
+                      ${item.user_rating === 'love' ? '❤️' : '🤍'}
+                    </button>
+                    <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-lg ${item.user_rating === 'dislike' ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-0'}">
+                      👎
+                    </button>
+                    <button onclick="openFeedbackModal(${item.id})" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-base font-semibold border border-slate-200 transition whitespace-nowrap">
+                      💬 Calificar
+                    </button>
+                  </div>
+
+                  <div class="flex items-center space-x-2">
+                    <button onclick="updateItemStatus(${item.id}, '${item.status === 'reading' ? 'inbox' : 'reading'}')" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 font-medium whitespace-nowrap">
+                      ${item.status === 'reading' ? '🔖 Guardado' : '🔖 Guardar'}
+                    </button>
+                    <button onclick="updateItemStatus(${item.id}, 'archived')" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 whitespace-nowrap">
+                      ✓ Visto
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          `;
+        } else {
+          return `
+            <article class="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-4 sm:p-5 transition shadow-sm hover:shadow-md space-y-3">
+              <div class="flex items-center justify-between text-lg gap-2 flex-wrap">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-base font-semibold">
+                    ${source.platform.icon} ${source.platform.label}
+                  </span>
+                  <span class="font-bold text-slate-800 text-lg break-words">${source.displayName}</span>
+                </div>
+                <div class="shrink-0">${matchBadge}</div>
+              </div>
+
+              <div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 font-serif leading-snug">
+                  <a href="${item.url}" target="_blank" class="hover:text-blue-600 transition">
+                    ${item.title}
+                  </a>
+                </h2>
+                <p class="text-lg text-slate-600 font-sans mt-1.5 line-clamp-2 leading-relaxed">
+                  ${stripMarkdownNoise(item.summary_tldr || item.raw_content)}
+                </p>
+              </div>
+
+              ${item.curator_note ? `
+                <p class="text-lg text-slate-600 leading-relaxed italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  💡 <strong>Por qué leerlo:</strong> ${stripMarkdownNoise(item.curator_note)}
+                </p>
+              ` : ''}
+
+              <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-lg">
+                <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSummary(${item.id})">
+                  <div class="font-bold text-slate-800 flex items-center gap-1 text-lg">
+                    <span class="text-blue-600">✦</span> Puntos Clave
+                  </div>
+                  <button id="toggle-btn-${item.id}" class="text-blue-600 font-bold text-lg">
+                    Desplegar ▾
+                  </button>
+                </div>
+
+                <div id="summary-content-${item.id}" class="hidden pt-2 border-t border-slate-200 space-y-2 text-slate-700">
+                  ${takeaways.length > 0 ? `
+                    <ul class="space-y-1 text-lg text-slate-700 list-disc list-inside">
+                      ${takeaways.map(t => `<li>${stripMarkdownNoise(t)}</li>`).join('')}
+                    </ul>
+                  ` : ''}
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-lg">
+                <div class="flex items-center space-x-1">
+                  <button onclick="quickRate(${item.id}, 'love')" title="Me encanta (Entrenar IA)" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition text-lg">
+                    ${item.user_rating === 'love' ? '❤️' : '🤍'}
+                  </button>
+                  <button onclick="quickRate(${item.id}, 'dislike')" title="No me interesa (Penalizar)" class="p-1.5 rounded-lg hover:bg-slate-100 transition text-lg ${item.user_rating === 'dislike' ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-70 hover:grayscale-0'}">
+                    👎
+                  </button>
+                  <button onclick="openFeedbackModal(${item.id})" class="px-2 py-1 rounded bg-white text-slate-700 text-base font-semibold border border-slate-200 whitespace-nowrap">
+                    💬 Calificar
+                  </button>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                  <a href="${item.url}" target="_blank" class="text-blue-600 hover:text-blue-700 font-bold whitespace-nowrap">
+                    Leer ↗
+                  </a>
+                  <button onclick="updateItemStatus(${item.id}, 'archived')" class="text-slate-500 hover:text-slate-800 whitespace-nowrap">
+                    ✓ Visto
+                  </button>
+                </div>
+              </div>
+            </article>
+          `;
+        }
+      }).join('');
+    }
+
+    function toggleSummary(id) {
+      const content = document.getElementById(`summary-content-${id}`);
+      const btn = document.getElementById(`toggle-btn-${id}`);
+      if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        btn.innerText = 'Ocultar ▲';
+      } else {
+        content.classList.add('hidden');
+        btn.innerText = 'Desplegar ▾';
+      }
+    }
+
+    async function quickRate(itemId, rating) {
+      try {
+        const res = await fetch(`/api/items/${itemId}/feedback`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ rating })
+        });
+        const data = await res.json();
+        if (!res.ok || data.status === 'error') {
+          throw new Error(data.message || `HTTP ${res.status}`);
+        }
+        showToast(rating === 'love' ? '¡Guardado! (+Relevancia)' : 'Entendido, reduciremos este contenido');
+        await loadItems();
+        await loadProfile();
+      } catch (err) {
+        showToast('Error al calificar: ' + err.message, '⚠️');
+      }
+    }
+
+    function openFeedbackModal(itemId) {
+      const item = cachedItems.find(i => i.id === itemId);
+      if (!item) return;
+      activeFeedbackItemId = itemId;
+      document.getElementById('feedback-item-title').innerText = item.title;
+      selectQuickRating(item.user_rating || 'love');
+      document.getElementById('feedback-comment').value = item.user_feedback_comment || '';
+      openModal('modal-feedback');
+    }
+
+    function selectQuickRating(rating) {
+      selectedRating = rating;
+      ['love', 'like', 'dislike'].forEach(r => {
+        const btn = document.getElementById(`rate-btn-${r}`);
+        if (r === rating) {
+          btn.className = "px-3 py-2 rounded-lg bg-blue-100 border border-blue-500 flex flex-col items-center gap-1 transition shadow-sm";
+        } else {
+          btn.className = "px-3 py-2 rounded-lg hover:bg-slate-100 border border-transparent flex flex-col items-center gap-1 transition opacity-70";
+        }
+      });
+    }
+
+    async function submitItemFeedback() {
+      if (!activeFeedbackItemId) return;
+      const comment = document.getElementById('feedback-comment').value.trim();
+      try {
+        const res = await fetch(`/api/items/${activeFeedbackItemId}/feedback`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ rating: selectedRating, comment })
+        });
+        const data = await res.json();
+        if (!res.ok || data.status === 'error') {
+          throw new Error(data.message || `HTTP ${res.status}`);
+        }
+        showToast('IA calibrada con tus comentarios ⭐');
+        closeModal('modal-feedback');
+        await loadItems();
+        await loadProfile();
+      } catch (err) {
+        showToast('Error al procesar feedback: ' + err.message, '⚠️');
+      }
+    }
+
+    async function updateItemStatus(id, newStatus) {
+      try {
+        await fetch(`/api/items/${id}/status`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ status: newStatus })
+        });
+        showToast(newStatus === 'archived' ? 'Marcado como visto' : 'Guardado');
+        await loadItems();
+      } catch (err) {
+        showToast('Error al actualizar', '⚠️');
+      }
+    }
+
+    async function syncAllBatches() {
+      if (isSyncing) return;
+      isSyncing = true;
+      
+      const banner = document.getElementById('sync-progress-banner');
+      const progressText = document.getElementById('sync-progress-text');
+      const progressCount = document.getElementById('sync-progress-count');
+      banner.classList.remove('hidden');
+
+      let offset = 0;
+      const limit = 15;
+      let totalFeeds = cachedFeeds.length || 102;
+      let totalNew = 0;
+
+      try {
+        while (true) {
+          progressText.innerText = `Sincronizando canales ${offset + 1} al ${Math.min(offset + limit, totalFeeds)}...`;
+          progressCount.innerText = `${offset}/${totalFeeds}`;
+
+          const res = await fetch('/api/feeds/sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ offset, limit })
+          });
+          const data = await res.json();
+          totalNew += data.new_items || 0;
+          totalFeeds = data.total_feeds || totalFeeds;
+
+          if (!data.has_more || data.batch_size === 0) {
+            break;
+          }
+          offset += limit;
+          await loadItems();
+        }
+
+        showToast(`Sincronización completa (+${totalNew} artículos)`, '⚡');
+        await loadItems();
+        await loadFeeds();
+      } catch (err) {
+        showToast('Error durante la sincronización', '⚠️');
+      } finally {
+        isSyncing = false;
+        banner.classList.add('hidden');
+      }
+    }
+
+    async function syncSingleFeed(feedId, feedUrl, feedType) {
+      showToast('Cargando artículos del canal...', '↻');
+      try {
+        const res = await fetch('/api/feeds/sync-single', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ feed_id: feedId, feed_url: feedUrl, feed_type: feedType })
+        });
+        const data = await res.json();
+        showToast(`Canal sincronizado (+${data.new_items || 0} items)`);
+        await loadItems();
+      } catch (err) {
+        showToast('Error al sincronizar canal', '⚠️');
+      }
+    }
+
+    async function deleteFeed(feedId) {
+      if (!confirm('¿Eliminar este canal de tus suscripciones?')) return;
+      try {
+        await fetch(`/api/feeds/${feedId}`, { method: 'DELETE' });
+        showToast('Canal eliminado');
+        await loadFeeds();
+        await loadItems();
+      } catch (err) {
+        showToast('Error al eliminar canal', '⚠️');
+      }
+    }
+
+    async function addSingleFeed() {
+      const url = document.getElementById('feed-url-input').value.trim();
+      if (!url) return;
+      try {
+        showToast('Conectando canal y descargando videos...', '⏳');
+        const res = await fetch('/api/feeds', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          showToast(`Canal agregado (+${data.new_items || 0} videos)`, '✓');
+          document.getElementById('feed-url-input').value = '';
+          closeModal('modal-add');
+          await loadFeeds();
+          await loadItems();
+        } else {
+          showToast('Error: ' + (data.message || 'No se pudo agregar'), '⚠️');
+        }
+      } catch (err) {
+        showToast('Error al agregar canal: ' + err.message, '⚠️');
+      }
+    }
+
+    async function importOpml() {
+      const text = document.getElementById('opml-input').value.trim();
+      if (!text) return;
+      try {
+        showToast('Procesando e insertando 102 canales...', '⏳');
+        const res = await fetch('/api/feeds/import-opml', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ opml: text })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          const failMsg = data.failed_count ? ` (${data.failed_count} fallaron)` : '';
+          showToast(`¡${data.imported_count} canales guardados en Supabase!${failMsg}`, '✓');
+          document.getElementById('opml-input').value = '';
+          closeModal('modal-add');
+          await loadFeeds();
+          syncAllBatches();
+        } else {
+          showToast('Error: ' + (data.message || 'Fallo al procesar'), '⚠️');
+        }
+      } catch (err) {
+        showToast('Error al importar OPML: ' + err.message, '⚠️');
+      }
+    }
+
+    async function loadProfile() {
+      try {
+        const res = await fetch('/api/profile');
+        const prof = await res.json();
+        const learned = prof.learned_preferences || {};
+        
+        // Debug status check
+        const dbStatus = document.getElementById('db-status-pill');
+        const statusRes = await fetch('/api/status');
+        const statusData = await statusRes.json();
+        if (statusData.is_supabase) {
+          dbStatus.innerHTML = '<span class="text-emerald-600 font-bold">● Supabase Conectado</span> (Persistencia en la nube activa)';
+        } else {
+          dbStatus.innerHTML = '<span class="text-amber-600 font-bold">● Modo Local / SQLite</span> (Revisa las variables de Supabase en Vercel)';
+        }
+
+        const authorsList = document.getElementById('learned-authors-list');
+        const authors = learned.boosted_authors || [];
+        authorsList.innerHTML = authors.map(a => `<span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">✓ ${a}</span>`).join('') || '<span class="text-slate-400">Aún no has calificado autores.</span>';
+
+        const tagsList = document.getElementById('learned-tags-list');
+        const tags = Object.keys(learned.boosted_tags || {});
+        tagsList.innerHTML = tags.map(t => `<span class="px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200">★ ${t}</span>`).join('') || '<span class="text-slate-400">Califica con ❤️ los videos o lecturas que te gusten.</span>';
+
+        document.getElementById('edit-focus-topics').value = (prof.focus_topics || []).join('\n');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function saveTopicsFromModal() {
+      const raw = document.getElementById('edit-focus-topics').value;
+      const topics = raw.split('\n').map(t => t.trim()).filter(Boolean);
+      try {
+        await fetch('/api/profile', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ focus_topics: topics })
+        });
+        showToast('Temas actualizados exitosamente');
+        closeModal('modal-learned');
+        await loadItems();
+      } catch (err) {
+        showToast('Error al guardar', '⚠️');
+      }
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>

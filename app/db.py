@@ -75,11 +75,12 @@ def get_db_connection():
     return conn
 
 def init_db():
+    """Esquema local espejo de supabase_schema_v2.sql (corpus global + estado por usuario)."""
     if is_supabase():
         return
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
+    cursor.executescript("""
     CREATE TABLE IF NOT EXISTS feeds (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
@@ -87,14 +88,12 @@ def init_db():
         site_url TEXT,
         feed_type TEXT NOT NULL,
         channel_id TEXT,
-        custom_category TEXT DEFAULT 'General',
         icon_url TEXT,
         is_active INTEGER DEFAULT 1,
         last_synced_at TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
-    """)
-    cursor.execute("""
+
     CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         feed_id INTEGER,
@@ -109,32 +108,65 @@ def init_db():
         duration_seconds INTEGER DEFAULT 0,
         raw_content TEXT,
         transcript TEXT,
-        relevance_score INTEGER DEFAULT 0,
         summary_tldr TEXT,
         key_takeaways TEXT,
-        curator_note TEXT,
         topic_tags TEXT,
         ai_processed INTEGER DEFAULT 0,
         ai_processed_at TEXT,
-        status TEXT DEFAULT 'inbox',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        feed_id INTEGER NOT NULL,
+        custom_category TEXT DEFAULT 'General',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, feed_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        item_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'inbox',
+        relevance_score INTEGER,
+        curator_note TEXT,
         user_rating TEXT DEFAULT 'none',
         user_feedback_comment TEXT,
         feedback_at TEXT,
+        scored_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, item_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        item_id INTEGER,
+        kind TEXT NOT NULL DEFAULT 'item_analysis',
+        model TEXT,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        cost_usd REAL DEFAULT 0,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
-    """)
-    cursor.execute("""
+
     CREATE TABLE IF NOT EXISTS user_profile (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_name TEXT DEFAULT 'León Velázquez',
+        user_id TEXT PRIMARY KEY,
+        user_name TEXT,
         focus_topics TEXT,
         system_prompt_criteria TEXT,
         learned_preferences TEXT,
         min_relevance_threshold INTEGER DEFAULT 60,
-        api_key_gemini TEXT,
-        api_key_openai TEXT,
+        plan TEXT DEFAULT 'free',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE INDEX IF NOT EXISTS idx_subs_user ON subscriptions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_uitems_user_status ON user_items(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_usage_user_date ON ai_usage(user_id, created_at);
     """)
     conn.commit()
     conn.close()

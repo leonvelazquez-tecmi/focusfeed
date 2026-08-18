@@ -311,28 +311,33 @@ def register_feed(title: str, feed_url: str, feed_type: str = "youtube", categor
         raise e
 
 def save_items_to_db(items: list):
+    """Inserta items en el corpus global. Sin estado personal: eso vive en user_items."""
     conn = get_db_connection()
     cursor = conn.cursor()
     inserted_count = 0
-    
+
     for item in items:
         try:
             cursor.execute("""
             INSERT OR IGNORE INTO items (
-                feed_id, guid, title, url, author, published_at, 
-                content_type, video_id, thumbnail_url, raw_content, transcript, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'inbox')
+                feed_id, guid, title, url, author, published_at,
+                content_type, video_id, thumbnail_url, raw_content, transcript,
+                summary_tldr, key_takeaways, topic_tags
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                item["feed_id"], item["guid"], item["title"], item["url"], 
-                item["author"], item["published_at"], item["content_type"], 
-                item.get("video_id"), item.get("thumbnail_url", ""), 
-                item.get("raw_content", ""), item.get("transcript", "")
+                item["feed_id"], item["guid"], item["title"], item["url"],
+                item.get("author", "Autor"), item["published_at"], item["content_type"],
+                item.get("video_id"), item.get("thumbnail_url", ""),
+                item.get("raw_content", ""), item.get("transcript", ""),
+                item.get("summary_tldr", ""), item.get("key_takeaways", "[]"),
+                item.get("topic_tags", "[]")
             ))
             if cursor.rowcount > 0:
                 inserted_count += 1
-        except Exception:
+        except Exception as e:
+            print(f"save_items_to_db: fallo al guardar '{item.get('title')}': {e}")
             continue
-            
+
     conn.commit()
     conn.close()
     return inserted_count

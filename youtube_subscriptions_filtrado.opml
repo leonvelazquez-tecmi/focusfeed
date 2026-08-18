@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.0">
+  <head>
+    <title>YouTube - Subconjunto filtrado (Liked Videos) - FocusFeed Import</title>
+  </head>
+  <body>
+    <outline text="YouTube (filtrado)" title="YouTube (filtrado)">
+    <outline text="Karsten Runquist" title="Karsten Runquist" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCS85PXHRkizrbGHBCe4tV3g" htmlUrl="https://www.youtube.com/channel/UCS85PXHRkizrbGHBCe4tV3g"/>
+    <outline text="Good Work" title="Good Work" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UC_-hYjoNe4PJNFa9iZ4lraA" htmlUrl="https://www.youtube.com/channel/UC_-hYjoNe4PJNFa9iZ4lraA"/>
+    <outline text="Professor Skye's Record Review" title="Professor Skye's Record Review" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCG39iIqfeD8d8YBgMqdYauw" htmlUrl="https://www.youtube.com/channel/UCG39iIqfeD8d8YBgMqdYauw"/>
+    <outline text="A Dude And A Diva" title="A Dude And A Diva" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCPUd2dvvtcSkk-Z01pgpJ9Q" htmlUrl="https://www.youtube.com/channel/UCPUd2dvvtcSkk-Z01pgpJ9Q"/>
+    <outline text="turning the tables" title="turning the tables" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCgmDCcn9oo7m9XCIfi8eavw" htmlUrl="https://www.youtube.com/channel/UCgmDCcn9oo7m9XCIfi8eavw"/>
+    <outline text="Jeff Su" title="Jeff Su" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCwAnu01qlnVg1Ai2AbtTMaA" htmlUrl="https://www.youtube.com/channel/UCwAnu01qlnVg1Ai2AbtTMaA"/>
+    <outline text="Diamond Owl Reactions" title="Diamond Owl Reactions" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UC8DbJC-CCE4SRO0weu_toTA" htmlUrl="https://www.youtube.com/channel/UC8DbJC-CCE4SRO0weu_toTA"/>
+    <outline text="The Verge" title="The Verge" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCddiUEpeqJcYeBxX1IVBKvQ" htmlUrl="https://www.youtube.com/channel/UCddiUEpeqJcYeBxX1IVBKvQ"/>
+    <outline text="Joanna Stern" title="Joanna Stern" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCi0_2sEpmT6FKn5-y6_W3cA" htmlUrl="https://www.youtube.com/channel/UCi0_2sEpmT6FKn5-y6_W3cA"/>
+    <outline text="Sandeep Swadia" title="Sandeep Swadia" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UC4ZVkG3RQPzvZk7alIVjcCg" htmlUrl="https://www.youtube.com/channel/UC4ZVkG3RQPzvZk7alIVjcCg"/>
+    <outline text="Dan Murrell" title="Dan Murrell" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCbiOAho0h23IMInURiESx1w" htmlUrl="https://www.youtube.com/channel/UCbiOAho0h23IMInURiESx1w"/>
+    <outline text="NEVER TOO SMALL" title="NEVER TOO SMALL" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UC_zQ777U6YTyatP3P1wi3xw" htmlUrl="https://www.youtube.com/channel/UC_zQ777U6YTyatP3P1wi3xw"/>
+    <outline text="Charli xcx" title="Charli xcx" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCOvEMf00DnwdkpOCRWdc6uA" htmlUrl="https://www.youtube.com/channel/UCOvEMf00DnwdkpOCRWdc6uA"/>
+    <outline text="Saturday Night Live" title="Saturday Night Live" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCqFzWxSCi39LnW1JKFR3efg" htmlUrl="https://www.youtube.com/channel/UCqFzWxSCi39LnW1JKFR3efg"/>
+    <outline text="Five By Nine" title="Five By Nine" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UChDexmcQfMhynTrnSsXC6_Q" htmlUrl="https://www.youtube.com/channel/UChDexmcQfMhynTrnSsXC6_Q"/>
+    <outline text="Noel Robinson" title="Noel Robinson" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCQB0skuuxIbGjtsC0bCkCPg" htmlUrl="https://www.youtube.com/channel/UCQB0skuuxIbGjtsC0bCkCPg"/>
+    <outline text="Moon" title="Moon" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCmFeOdJI3IXgTBDzqBLD8qg" htmlUrl="https://www.youtube.com/channel/UCmFeOdJI3IXgTBDzqBLD8qg"/>
+    <outline text="Hard Fork" title="Hard Fork" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCZcR2SVWaGWNlMqPxvQS3vw" htmlUrl="https://www.youtube.com/channel/UCZcR2SVWaGWNlMqPxvQS3vw"/>
+    <outline text="Jungle4eva" title="Jungle4eva" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCR4a2QKvUuLvLGA6M5MM2ew" htmlUrl="https://www.youtube.com/channel/UCR4a2QKvUuLvLGA6M5MM2ew"/>
+    <outline text="AJ+ Español" title="AJ+ Español" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCS0lmlVIYVz2qeWlZ_ynIWg" htmlUrl="https://www.youtube.com/channel/UCS0lmlVIYVz2qeWlZ_ynIWg"/>
+    <outline text="Scroll Deep" title="Scroll Deep" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCSgTfFfu6aBjl7S5i0Tx1zg" htmlUrl="https://www.youtube.com/channel/UCSgTfFfu6aBjl7S5i0Tx1zg"/>
+    <outline text="Stamp of Approval" title="Stamp of Approval" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCcO-skvZ2_jDBDCBC0YPJ9w" htmlUrl="https://www.youtube.com/channel/UCcO-skvZ2_jDBDCBC0YPJ9w"/>
+    <outline text="There's An AI For That" title="There's An AI For That" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCHCCGSnjLpHwL2bv-d4yz7g" htmlUrl="https://www.youtube.com/channel/UCHCCGSnjLpHwL2bv-d4yz7g"/>
+    <outline text="Movie Balls Deep" title="Movie Balls Deep" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCWysrvtUOjXKOR2v90DboXg" htmlUrl="https://www.youtube.com/channel/UCWysrvtUOjXKOR2v90DboXg"/>
+    <outline text="theneedledrop" title="theneedledrop" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCt7fwAhXDy3oNFTAzF2o8Pw" htmlUrl="https://www.youtube.com/channel/UCt7fwAhXDy3oNFTAzF2o8Pw"/>
+    <outline text="Morning Brew Daily" title="Morning Brew Daily" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCJGeBpBh9_Q0B_EKPmj14Pg" htmlUrl="https://www.youtube.com/channel/UCJGeBpBh9_Q0B_EKPmj14Pg"/>
+    <outline text="Digital Spaghetti" title="Digital Spaghetti" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCTdsYrCpF2zRKWWL0SkaOtA" htmlUrl="https://www.youtube.com/channel/UCTdsYrCpF2zRKWWL0SkaOtA"/>
+    <outline text="Screen Junkies" title="Screen Junkies" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCOpcACMWblDls9Z6GERVi1A" htmlUrl="https://www.youtube.com/channel/UCOpcACMWblDls9Z6GERVi1A"/>
+    <outline text="Jared Bauer" title="Jared Bauer" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCqCvsZGMJV0YmookKJ6-nlg" htmlUrl="https://www.youtube.com/channel/UCqCvsZGMJV0YmookKJ6-nlg"/>
+    <outline text="Los NB Norteño Banda" title="Los NB Norteño Banda" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UC0YwbqwKJ-ajLkzr2f-TETA" htmlUrl="https://www.youtube.com/channel/UC0YwbqwKJ-ajLkzr2f-TETA"/>
+    <outline text="YouTube" title="YouTube" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCBR8-60-B28hp2BmDPdntcQ" htmlUrl="https://www.youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ"/>
+    <outline text="Thomas Flight" title="Thomas Flight" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCUyvQV2JsICeLZP4c_h40kA" htmlUrl="https://www.youtube.com/channel/UCUyvQV2JsICeLZP4c_h40kA"/>
+    <outline text="Fred again . ." title="Fred again . ." type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCXF6DMVLIVRr2OQAqyfEGeg" htmlUrl="https://www.youtube.com/channel/UCXF6DMVLIVRr2OQAqyfEGeg"/>
+    <outline text="Hasan Minhaj" title="Hasan Minhaj" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCarEovlrD9QY-fy-Z6apIDQ" htmlUrl="https://www.youtube.com/channel/UCarEovlrD9QY-fy-Z6apIDQ"/>
+    <outline text="Chris Stuckmann" title="Chris Stuckmann" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCCqEeDAUf4Mg0GgEN658tkA" htmlUrl="https://www.youtube.com/channel/UCCqEeDAUf4Mg0GgEN658tkA"/>
+    <outline text="Paul J Lipsky" title="Paul J Lipsky" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCmeU2DYiVy80wMBGZzEWnbw" htmlUrl="https://www.youtube.com/channel/UCmeU2DYiVy80wMBGZzEWnbw"/>
+    <outline text="The New Yorker" title="The New Yorker" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCsD-Qms-AkXDrsU962OicLw" htmlUrl="https://www.youtube.com/channel/UCsD-Qms-AkXDrsU962OicLw"/>
+    <outline text="Tina Huang" title="Tina Huang" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UC2UXDak6o7rBm23k3Vv5dww" htmlUrl="https://www.youtube.com/channel/UC2UXDak6o7rBm23k3Vv5dww"/>
+    <outline text="Blazing Zebra" title="Blazing Zebra" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCmZqTB34wHK3KdDoZAlNr0g" htmlUrl="https://www.youtube.com/channel/UCmZqTB34wHK3KdDoZAlNr0g"/>
+    <outline text="JM" title="JM" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UC9UtNjtLfFdjb8tVgGNAW3A" htmlUrl="https://www.youtube.com/channel/UC9UtNjtLfFdjb8tVgGNAW3A"/>
+    <outline text="Sebastián Merino" title="Sebastián Merino" type="rss" xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCbbkgfP086E9IrKa5PHiUgA" htmlUrl="https://www.youtube.com/channel/UCbbkgfP086E9IrKa5PHiUgA"/>
+    </outline>
+  </body>
+</opml>
