@@ -11,13 +11,19 @@ SUPABASE_URL = (
     ""
 ).rstrip("/")
 
+# El backend resuelve el usuario por su cuenta (app/auth.py) y luego filtra por
+# user_id en cada consulta. Con RLS encendido, la llave anon no tiene auth.uid()
+# y las tablas personales devolverían vacío. Por eso la service_role va primero.
+# Esta llave NUNCA debe llegar al navegador.
 SUPABASE_KEY = (
-    os.environ.get("SUPABASE_KEY") or 
-    os.environ.get("SUPABASE_ANON_KEY") or 
-    os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY") or 
-    os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or 
+    os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or
+    os.environ.get("SUPABASE_KEY") or
+    os.environ.get("SUPABASE_ANON_KEY") or
+    os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY") or
     ""
 )
+
+USING_SERVICE_ROLE = bool(os.environ.get("SUPABASE_SERVICE_ROLE_KEY"))
 
 DB_PATH = os.environ.get("FEED_DB_PATH", "/tmp/feed_curator.db")
 
@@ -33,6 +39,7 @@ def get_supabase_debug_info():
         "url_preview": (SUPABASE_URL[:30] + "...") if SUPABASE_URL else "Falta URL",
         "key_present": bool(SUPABASE_KEY),
         "key_preview": (SUPABASE_KEY[:15] + "...") if SUPABASE_KEY else "Falta Key",
+        "service_role": USING_SERVICE_ROLE,
         "last_error": LAST_SUPABASE_ERROR
     }
 

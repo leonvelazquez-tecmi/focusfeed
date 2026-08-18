@@ -140,6 +140,33 @@ def main():
     check("El resumen global suma los dos usuarios",
           storage.usage_summary()["active_users"] == 2)
 
+    print("\n9. Calificar mueve el item de estado (fix 18-ago)")
+    feed_ana = [i for i in storage.fetch_items(ANA)["items"]]
+    para_dislike = feed_ana[0]["id"]
+    para_love = feed_ana[1]["id"]
+
+    record_feedback(ANA, para_dislike, "dislike")
+    tras_dislike = {i["id"] for i in storage.fetch_items(ANA)["items"]}
+    check("El dislike saca el item del feed de verdad", para_dislike not in tras_dislike)
+    check("Y queda archivado en la base, no solo en pantalla",
+          storage.get_user_item(ANA, para_dislike)["status"] == "archived")
+
+    record_feedback(ANA, para_love, "love")
+    guardados = {i["id"] for i in storage.fetch_items(ANA, tab="reading")["items"]}
+    check("El corazón guarda automático", para_love in guardados)
+    check("Y el item sigue visible en el feed", para_love in
+          {i["id"] for i in storage.fetch_items(ANA)["items"]})
+
+    otro = feed_ana[2]["id"]
+    record_feedback(ANA, otro, "like")
+    ui_like = storage.get_user_item(ANA, otro)
+    check("El pulgar arriba entrena pero no mueve el item",
+          ui_like["status"] == "inbox" and ui_like["user_rating"] == "like")
+
+    check("Nada de esto tocó a Bruno",
+          not storage.fetch_items(BRUNO, tab="reading")["items"]
+          and not storage.fetch_items(BRUNO, tab="archived")["items"])
+
     print("\n" + "=" * 58)
     if fallos:
         print(f"FALLARON {len(fallos)} verificaciones:")

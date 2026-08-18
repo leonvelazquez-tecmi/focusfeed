@@ -1,11 +1,11 @@
 {
-  "name": "FocusFeed",
+  "name": "FocusFeed - Anti-Algoritmo",
   "short_name": "FocusFeed",
-  "description": "Tu feed curado por IA, que aterriza en tu vault",
+  "description": "Feed curado por IA libre de algoritmos de recomendación",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f4f5f7",
-  "theme_color": "#ffffff",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/3669/3669986.png",

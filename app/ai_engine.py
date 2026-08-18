@@ -245,12 +245,26 @@ def score_pending_for_user(user_id: str, limit: int = 40):
     return scored
 
 
+# Qué le pasa al item en el feed según cómo lo califiques.
+# El corazón guarda automático; el pulgar abajo lo saca del feed de verdad.
+# 'like' es una señal más suave: entrena preferencias sin mover el item.
+RATING_TO_STATUS = {
+    "love": "reading",
+    "dislike": "archived",
+}
+
+
 def record_feedback(user_id: str, item_id: int, rating: str, comment: str = ""):
-    """Guarda la calificación y ajusta las preferencias aprendidas del usuario."""
+    """Guarda la calificación, mueve el item de estado y ajusta las preferencias."""
     from app.storage import (save_user_feedback, get_item_by_id,
-                             update_learned_preferences, fetch_profile)
+                             update_learned_preferences, fetch_profile,
+                             set_item_status)
 
     save_user_feedback(user_id, item_id, rating, comment)
+
+    new_status = RATING_TO_STATUS.get(rating)
+    if new_status:
+        set_item_status(user_id, item_id, new_status)
 
     item = get_item_by_id(item_id)
     if not item:

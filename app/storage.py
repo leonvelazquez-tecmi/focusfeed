@@ -493,9 +493,14 @@ def unsubscribe(user_id: str, feed_id: int):
     if is_supabase():
         supabase_request(
             f"subscriptions?user_id=eq.{user_id}&feed_id=eq.{int(feed_id)}", method="DELETE")
-        supabase_request(
-            f"user_items?user_id=eq.{user_id}&item_id=in.(select id from items where feed_id={int(feed_id)})",
-            method="DELETE")
+        # PostgREST no acepta subconsultas dentro de in.(), hay que resolver los
+        # ids primero y borrar por lotes.
+        res = supabase_request(f"items?select=id&feed_id=eq.{int(feed_id)}&limit=5000")
+        item_ids = [r["id"] for r in res] if isinstance(res, list) else []
+        for i in range(0, len(item_ids), 200):
+            chunk = ",".join(str(x) for x in item_ids[i:i + 200])
+            supabase_request(
+                f"user_items?user_id=eq.{user_id}&item_id=in.({chunk})", method="DELETE")
         return
     conn = get_db_connection()
     cursor = conn.cursor()

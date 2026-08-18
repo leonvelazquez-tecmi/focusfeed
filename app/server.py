@@ -21,7 +21,8 @@ from app.ingestion import (
     parse_opml, resolve_feed_url, HEADERS
 )
 from app.ai_engine import (
-    process_item_ai, record_feedback, analyze_content, score_pending_for_user
+    process_item_ai, record_feedback, analyze_content, score_pending_for_user,
+    RATING_TO_STATUS
 )
 
 PORT = int(os.environ.get("PORT", 8080))
@@ -221,9 +222,15 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
         match_feedback = re.match(r"^/api/items/(\d+)/feedback$", path)
         if match_feedback:
             item_id = int(match_feedback.group(1))
+            rating = body.get("rating", "like")
             try:
-                record_feedback(user_id, item_id, body.get("rating", "like"), body.get("comment", ""))
-                self.send_json_response({"status": "success", "item_id": item_id})
+                record_feedback(user_id, item_id, rating, body.get("comment", ""))
+                # El frontend necesita saber a dónde se movió el item para
+                # actualizar la tarjeta sin recargar todo el feed.
+                self.send_json_response({
+                    "status": "success", "item_id": item_id,
+                    "new_status": RATING_TO_STATUS.get(rating)
+                })
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return

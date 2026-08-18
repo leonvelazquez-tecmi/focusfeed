@@ -8,6 +8,15 @@
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
 <title>FocusFeed</title>
+<script>
+  // Se ejecuta antes del CSS para evitar el parpadeo de tema al cargar.
+  (function(){
+    try{
+      var t=localStorage.getItem('ff_theme');
+      if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t);
+    }catch(e){}
+  })();
+</script>
 <link rel="manifest" href="/manifest.json">
 <style>
   :root{
@@ -19,8 +28,11 @@
     --danger:#b42318;
     --shadow:0 1px 2px rgba(16,24,40,.05);
   }
+  /* Tres estados: automático (sigue al sistema), claro forzado y oscuro forzado.
+     La paleta oscura se repite en los dos bloques para que la elección manual
+     gane en ambas direcciones, no solo cuando coincide con el sistema. */
   @media (prefers-color-scheme: dark){
-    :root{
+    :root:not([data-theme="light"]){
       --bg:#0f1115; --surface:#171a20; --surface-2:#1d2129;
       --text:#f2f4f7; --text-2:#b6bcc6; --text-3:#7d848f;
       --border:#262b33; --border-2:#20242b;
@@ -29,6 +41,15 @@
       --danger:#f97066;
       --shadow:none;
     }
+  }
+  :root[data-theme="dark"]{
+      --bg:#0f1115; --surface:#171a20; --surface-2:#1d2129;
+      --text:#f2f4f7; --text-2:#b6bcc6; --text-3:#7d848f;
+      --border:#262b33; --border-2:#20242b;
+      --accent:#4ade80; --accent-soft:#16281c;
+      --blue:#7aa2ff; --blue-soft:#161d2e;
+      --danger:#f97066;
+      --shadow:none;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0}
@@ -147,7 +168,8 @@
   .field{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px 13px;font-size:16px;color:var(--text);outline:none;font-family:inherit}
   .lbl{display:block;font-size:14.5px;font-weight:650;color:var(--text-2);margin:14px 0 6px}
   .btn{width:100%;background:var(--accent);color:#fff;font-weight:750;font-size:16px;border-radius:12px;padding:13px;margin-top:12px}
-  @media (prefers-color-scheme: dark){.btn{color:#0f1115}}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn{color:#0f1115}}
+  :root[data-theme="dark"] .btn{color:#0f1115}
   .btn.sec{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
   .chips{display:flex;flex-wrap:wrap;gap:6px;font-size:13.5px}
   .chip{background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:4px 10px;color:var(--text-2)}
@@ -262,6 +284,13 @@
     <div id="l-authors" class="chips"></div>
     <label class="lbl">🎯 Temas con más afinidad</label>
     <div id="l-tags" class="chips"></div>
+    <label class="lbl">🎨 Apariencia</label>
+    <div class="rateopts">
+      <button class="rateopt" data-theme-opt="auto"><span class="em">🔄</span>Automático</button>
+      <button class="rateopt" data-theme-opt="light"><span class="em">☀️</span>Claro</button>
+      <button class="rateopt" data-theme-opt="dark"><span class="em">🌙</span>Oscuro</button>
+    </div>
+
     <label class="lbl">📝 Temas base de enfoque</label>
     <textarea id="l-topics" rows="6" class="field"></textarea>
     <button class="btn" data-act="save-topics">Actualizar temas</button>
@@ -325,6 +354,19 @@ function closeModal(id){$('#'+id).classList.add('hidden')}
 // Cambio de cuenta solo para desarrollo: ?user=<uuid> permite abrir dos
 // sesiones distintas y comprobar el aislamiento. El servidor ignora esta
 // cabecera cuando Supabase está configurado, así que en producción es inerte.
+function applyTheme(choice){
+  const root=document.documentElement;
+  if(choice==='auto') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme',choice);
+  try{ localStorage.setItem('ff_theme',choice); }catch(e){}
+  document.querySelectorAll('[data-theme-opt]').forEach(b=>
+    b.classList.toggle('on', b.dataset.themeOpt===choice));
+}
+
+function currentTheme(){
+  try{ return localStorage.getItem('ff_theme') || 'auto'; }catch(e){ return 'auto'; }
+}
+
 const DEV_USER = (()=>{
   const q=new URLSearchParams(location.search).get('user');
   if(q){ sessionStorage.setItem('ff_dev_user', q); return q; }
@@ -336,7 +378,10 @@ async function api(path,opts){
   o.headers = Object.assign({}, o.headers||{});
   if(DEV_USER) o.headers['X-Dev-User']=DEV_USER;
   const r=await fetch(path,o);
-  return r.json();
+  const data = await r.json().catch(()=>({}));
+  // Sin esto la interfaz daba por buena una escritura que nunca ocurrió.
+  if(!r.ok || data.status==='error') throw new Error(data.message || `HTTP ${r.status}`);
+  return data;
 }
 
 async function loadFeeds(){
@@ -505,49 +550,84 @@ async function setStatus(id,status){
   return api(`/api/items/${id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
 }
 async function markRead(id){
-  const it=items.find(i=>i.id===id);
+  // Guardar el estado previo: si estaba guardado, deshacer debe devolverlo
+  // a guardado, no dejarlo en inbox y perder el marcador.
+  const previo=(items.find(i=>i.id===id)||{}).status||'inbox';
+  try{
+    await setStatus(id,'archived');
+  }catch(e){
+    toast('No se pudo marcar como visto: '+e.message);
+    return;
+  }
   removeCard(id);
-  await setStatus(id,'archived');
-  toast('Marcado como visto','Deshacer',async()=>{ await setStatus(id,'inbox'); loadItems(true); });
+  toast('Marcado como visto','Deshacer',async()=>{
+    try{ await setStatus(id,previo); loadItems(true); }
+    catch(e){ toast('No se pudo deshacer: '+e.message); }
+  });
   if(rendered.length===0) loadItems();
 }
 async function toggleSave(id){
   const it=items.find(i=>i.id===id); if(!it) return;
   const next=it.status==='reading'?'inbox':'reading';
+  try{
+    await setStatus(id,next);
+  }catch(e){
+    toast('No se pudo guardar: '+e.message);
+    return;
+  }
   it.status=next;
-  await setStatus(id,next);
-  const btn=document.querySelector(`.act[data-act="save"][data-id="${id}"]`);
-  if(btn){ btn.textContent=next==='reading'?'🔖 Guardado':'🔖 Guardar'; btn.classList.toggle('on',next==='reading'); }
+  markSaveButton(id,next==='reading');
   toast(next==='reading'?'Guardado en tu lista':'Quitado de guardados');
   loadItems(true);
   if(currentTab==='reading' && next!=='reading') removeCard(id);
 }
+
+function markSaveButton(id,saved){
+  const btn=document.querySelector(`.act[data-act="save"][data-id="${id}"]`);
+  if(!btn) return;
+  btn.textContent = saved ? '🔖 Guardado' : '🔖 Guardar';
+  btn.classList.toggle('on',saved);
+}
 async function rate(id,rating){
   const it=items.find(i=>i.id===id);
-  if(it) it.user_rating = (it.user_rating===rating)?'none':rating;
   try{
-    await api(`/api/items/${id}/feedback`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating})});
-    toast(rating==='love'?'Más contenido así ❤️':'Menos contenido así 👎');
-    if(rating==='dislike') removeCard(id);
-    else{
+    const res=await api(`/api/items/${id}/feedback`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating})});
+    if(it){ it.user_rating=rating; if(res.new_status) it.status=res.new_status; }
+
+    if(res.new_status==='archived'){
+      removeCard(id);
+      toast('Menos contenido así 👎');
+      if(rendered.length===0) loadItems();
+    }else if(res.new_status==='reading'){
+      // El corazón guarda automático: la tarjeta se queda, marcada.
+      markSaveButton(id,true);
       const b=document.querySelector(`.act[data-act="love"][data-id="${id}"]`);
-      if(b) b.textContent = it && it.user_rating==='love' ? '❤️':'🤍';
+      if(b) b.textContent='❤️';
+      toast('Guardado en tu lista ❤️');
+      loadItems(true);
+    }else{
+      toast('Anotado');
     }
     loadProfile();
-  }catch(e){ toast('Error al calificar'); }
+  }catch(e){ toast('Error al calificar: '+e.message); }
 }
 async function markAllRead(){
   // lo guardado con el marcador no se marca como leido: es una lista aparte
   const ids=rendered.filter(id=>{ const it=items.find(i=>i.id===id); return !it||it.status!=='reading'; });
   if(!ids.length){ toast('No hay nada que marcar'); return; }
-  ids.forEach(removeCard);
   try{
     await api('/api/items/bulk-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,status:'archived'})});
-    toast(`${ids.length} marcados como leídos`,'Deshacer',async()=>{
+  }catch(e){
+    toast('No se pudo marcar como leído: '+e.message);
+    return;
+  }
+  ids.forEach(removeCard);
+  toast(`${ids.length} marcados como leídos`,'Deshacer',async()=>{
+    try{
       await api('/api/items/bulk-status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,status:'inbox'})});
       loadItems();
-    });
-  }catch(e){ toast('Error al marcar'); }
+    }catch(e){ toast('No se pudo deshacer: '+e.message); }
+  });
   loadItems();
 }
 function openFeedback(id){
@@ -559,11 +639,15 @@ function openFeedback(id){
 }
 function setRate(r){
   fbRating=r;
-  document.querySelectorAll('.rateopt').forEach(b=>b.classList.toggle('on',b.dataset.rate===r));
+  // Acotado al modal de feedback: el selector de apariencia reusa .rateopt
+  // y sin este alcance perdería su resaltado al abrir la calificación.
+  document.querySelectorAll('#modal-feedback .rateopt').forEach(b=>b.classList.toggle('on',b.dataset.rate===r));
 }
 async function submitFeedback(){
   if(!fbItemId) return;
-  await api(`/api/items/${fbItemId}/feedback`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating:fbRating,comment:$('#fb-comment').value.trim()})});
+  try{
+    await api(`/api/items/${fbItemId}/feedback`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating:fbRating,comment:$('#fb-comment').value.trim()})});
+  }catch(e){ toast('No se pudo guardar la calificación: '+e.message); return; }
   closeModal('modal-feedback'); toast('Curador calibrado'); loadItems(true); loadProfile();
 }
 async function syncAll(){
@@ -616,6 +700,7 @@ document.addEventListener('click',async e=>{
   if(tabBtn){ setTab(tabBtn.dataset.tab); return; }
   const el=e.target.closest('[data-act]'); if(!el) return;
   const id=+el.dataset.id, act=el.dataset.act;
+  try{
   if(act==='read') markRead(id);
   else if(act==='save') toggleSave(id);
   else if(act==='love') rate(id,'love');
@@ -658,8 +743,13 @@ document.addEventListener('click',async e=>{
     await api('/api/feeds/'+id,{method:'DELETE'});
     await loadFeeds(); renderSources(); toast('Fuente eliminada');
   }
+  }catch(err){ toast('Algo falló: '+err.message); }
 });
-document.addEventListener('click',e=>{ const r=e.target.closest('.rateopt'); if(r) setRate(r.dataset.rate); });
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-theme-opt]');
+  if(t){ applyTheme(t.dataset.themeOpt); return; }
+  const r=e.target.closest('.rateopt'); if(r) setRate(r.dataset.rate);
+});
 document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{ if(e.target===m) m.classList.add('hidden'); }));
 $('#filter-type').addEventListener('change',()=>loadItems());
 
@@ -668,6 +758,8 @@ if(DEV_USER){
   pill.textContent='dev · '+DEV_USER.slice(0,8);
   pill.classList.remove('hidden');
 }
+
+applyTheme(currentTheme());
 
 (async function init(){ await loadFeeds(); await loadItems(); loadProfile(); })();
 </script>

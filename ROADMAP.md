@@ -1,6 +1,6 @@
 # Roadmap
 
-Actualizado: 18-ago-2026
+Actualizado: 18-ago-2026 (segunda pasada)
 
 ## Objetivo de este ciclo
 
@@ -60,5 +60,6 @@ Escrito a propósito, para que no se construya de más:
 - **`OWNER FALLBACK` en `app/auth.py`.** Cualquier request sin token válido se atiende como si fuera el dueño. Es intencional para que la app siga funcionando durante T2, y es lo primero que hay que borrar cuando el acceso esté puesto.
 - **El cron no escala.** Uno solo recorre todos los feeds en tandas de 15 con presupuesto de 50 segundos. Con varios usuarios no termina.
 - **El repo vive en cuenta institucional.** Mover a cuenta personal antes de que `customers/` tenga nombres y correos reales. Ese es el disparador, no una fecha.
+- **Sin confirmar: el guardado que se perdió el 18-ago.** El diagnóstico mostró la fila del dislike con `status='inbox'` (bug ya corregido), pero ninguna fila con `status='reading'` entre las 20 más recientes. Como todas las filas de la migración comparten `created_at`, el orden entre ellas es arbitrario y la consulta pudo dejarla fuera. La hipótesis principal es que la escritura falló en silencio, que es justo lo que el manejo de errores nuevo ahora hace visible. Si vuelve a pasar, ahora sale un toast con el error real.
 - **`set_item_status` y `feedback` no validan suscripción.** Un usuario puede crear una fila en `user_items` para un item de un feed al que no está suscrito. No filtra datos de nadie (la lectura del feed sí valida la suscripción) y no devuelve contenido ajeno, pero ensucia la tabla. Should fix, no bloquea.
 - **Nada de esto está subido.** El rediseño estilo Feedly, los arreglos de guardados y visto persistente, y todo T1 están en local, sin commit ni push.
