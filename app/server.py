@@ -3,9 +3,11 @@ import socketserver
 import json
 import urllib.parse
 import urllib.request
+import urllib.error
 import os
 import re
 import time
+from datetime import datetime, timezone
 import concurrent.futures
 
 from app.db import init_db, is_supabase
@@ -14,14 +16,14 @@ from app.storage import (
     fetch_items, set_item_status, bulk_set_status,
     fetch_feeds, fetch_all_active_feeds, create_or_update_feed, unsubscribe,
     fetch_profile, save_profile_data, batch_save_items,
-    ensure_seed_if_empty, get_pending_item_ids, usage_summary
+    ensure_seed_if_empty, get_pending_item_ids, usage_summary, save_feed_cache
 )
 from app.ingestion import (
     parse_youtube_feed_xml, parse_rss_feed_xml,
     parse_opml, resolve_feed_url, HEADERS
 )
 from app.ai_engine import (
-    process_item_ai, record_feedback, analyze_content, score_pending_for_user,
+    process_item_ai, record_feedback, score_pending_for_user,
     RATING_TO_STATUS
 )
 
@@ -31,37 +33,96 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 socketserver.TCPServer.allow_reuse_address = True
 
 
-def fetch_feed_and_parse(feed_dict: dict, enrich_top: int = 4) -> list:
-    """Descarga un feed y devuelve sus items. El enriquecimiento es universal:
-    no depende de quién esté suscrito."""
+def fetch_feed_and_parse(feed_dict: dict) -> list:
+    """Descarga un feed y devuelve sus items. Solo red y parseo: el resumen de IA
+    va después, y solo para lo nuevo (/api/items/process-pending).
+
+    Manda If-None-Match / If-Modified-Since con lo que guardó la sync anterior;
+    un 304 devuelve [] sin parsear. Los headers nuevos quedan en feed_dict
+    (_etag, _last_modified) para que sync_feeds los guarde."""
     feed_url = feed_dict.get("feed_url")
     feed_type = feed_dict.get("feed_type", "rss")
     feed_id = feed_dict.get("id", 1)
 
-    parsed_items = []
+    headers = dict(HEADERS)
+    if feed_dict.get("etag"):
+        headers["If-None-Match"] = feed_dict["etag"]
+    if feed_dict.get("last_modified"):
+        headers["If-Modified-Since"] = feed_dict["last_modified"]
+
     try:
-        req = urllib.request.Request(feed_url, headers=HEADERS)
-        with urllib.request.urlopen(req, timeout=3.5) as resp:
+        req = urllib.request.Request(feed_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            feed_dict["_fetched"] = True
+            feed_dict["_etag"] = resp.headers.get("ETag") or ""
+            feed_dict["_last_modified"] = resp.headers.get("Last-Modified") or ""
             xml_content = resp.read().decode('utf-8', errors='ignore')
-            if feed_type == "youtube":
-                parsed_items = parse_youtube_feed_xml(xml_content, feed_id)
-            else:
-                parsed_items = parse_rss_feed_xml(xml_content, feed_id)
-
-        for itm in parsed_items[:enrich_top]:
-            try:
-                analysis = analyze_content(
-                    title=itm["title"], author=itm["author"],
-                    content_type=itm["content_type"], content_text=itm["raw_content"])
-                itm["summary_tldr"] = analysis["summary_tldr"]
-                itm["key_takeaways"] = json.dumps(analysis["key_takeaways"], ensure_ascii=False)
-                itm["topic_tags"] = json.dumps(analysis["topic_tags"], ensure_ascii=False)
-            except Exception as e:
-                print(f"Enriquecimiento fallo para '{itm.get('title')}': {e}")
+    except urllib.error.HTTPError as e:
+        if e.code == 304:
+            feed_dict["_fetched"] = True
+            feed_dict["_etag"], feed_dict["_last_modified"] = feed_dict.get("etag"), feed_dict.get("last_modified")
+        else:
+            print(f"Error obteniendo feed {feed_url}: HTTP {e.code}")
+        return []
     except Exception as e:
-        print(f"Error obteniendo/parseando feed {feed_url}: {e}")
+        print(f"Error obteniendo feed {feed_url}: {e}")
+        return []
 
-    return parsed_items
+    if feed_type == "youtube":
+        return parse_youtube_feed_xml(xml_content, feed_id)
+    return parse_rss_feed_xml(xml_content, feed_id)
+
+
+def run_parallel(fn, args: list, workers: int, timeout: float) -> list:
+    """Corre fn sobre args en paralelo y devuelve los resultados que terminaron
+    a tiempo. Un elemento lento ya no tumba la tanda completa: antes el
+    TimeoutError de as_completed salía del try y la respuesta era un 500."""
+    results = []
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+    futures = [executor.submit(fn, a) for a in args]
+    try:
+        for fut in concurrent.futures.as_completed(futures, timeout=timeout):
+            try:
+                results.append(fut.result())
+            except Exception as e:
+                print(f"run_parallel: {e}")
+    except concurrent.futures.TimeoutError:
+        print(f"run_parallel: {sum(not f.done() for f in futures)} sin terminar a los {timeout}s")
+    executor.shutdown(wait=False, cancel_futures=True)
+    return results
+
+
+FRESH_SECONDS = 15 * 60  # YouTube no manda ETag; publica con max-age=900
+
+
+def is_fresh(feed: dict) -> bool:
+    last = feed.get("last_synced_at")
+    if not last:
+        return False
+    try:
+        dt = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).total_seconds() < FRESH_SECONDS
+    except ValueError:
+        return False
+
+
+def sync_feeds(feeds: list, timeout: float = 12, force: bool = False) -> int:
+    """Descarga feeds en paralelo, guarda los items nuevos y la caché HTTP de
+    cada feed. Salta los sincronizados hace menos de 15 min salvo force.
+    Devuelve cuántos items nuevos entraron al corpus."""
+    if not force:
+        feeds = [f for f in feeds if not is_fresh(f)]
+    batches = run_parallel(fetch_feed_and_parse, feeds, workers=16, timeout=timeout)
+    new_items = [i for b in batches for i in (b or [])]
+    for f in feeds:
+        if f.get("_fetched"):
+            try:
+                save_feed_cache(f.get("id"), f.get("_etag"), f.get("_last_modified"))
+            except Exception as e:
+                print(f"save_feed_cache: {e}")
+    return batch_save_items(new_items) if new_items else 0
 
 
 class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
@@ -127,8 +188,8 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                     return
 
             started = time.time()
-            time_budget_seconds = 50
-            batch_size = 15
+            time_budget_seconds = 45
+            batch_size = 40
 
             try:
                 feeds = fetch_all_active_feeds()
@@ -141,19 +202,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                     if time.time() - started > time_budget_seconds:
                         break
                     batch_slice = feeds[offset:offset + batch_size]
-                    all_new_items = []
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-                        futures = [executor.submit(fetch_feed_and_parse, f) for f in batch_slice]
-                        for fut in concurrent.futures.as_completed(futures, timeout=7.5):
-                            try:
-                                items = fut.result()
-                                if items:
-                                    all_new_items.extend(items)
-                            except Exception as e:
-                                print(f"Cron sync: fallo al sincronizar feed: {e}")
-                                continue
-                    if all_new_items:
-                        total_new_items += batch_save_items(all_new_items)
+                    total_new_items += sync_feeds(batch_slice)
                     feeds_synced += len(batch_slice)
                     offset += batch_size
 
@@ -240,16 +289,9 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
             limit = int(body.get("limit", 10))
             try:
                 pending_ids = get_pending_item_ids(limit)
-                processed = 0
-                with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-                    futures = [executor.submit(process_item_ai, iid, user_id) for iid in pending_ids]
-                    for fut in concurrent.futures.as_completed(futures, timeout=20):
-                        try:
-                            if fut.result():
-                                processed += 1
-                        except Exception as e:
-                            print(f"process-pending: fallo al analizar item: {e}")
-                            continue
+                results = run_parallel(lambda iid: process_item_ai(iid, user_id),
+                                       pending_ids, workers=6, timeout=20)
+                processed = sum(1 for r in results if r)
                 scored = score_pending_for_user(user_id)
                 self.send_json_response({"status": "success", "processed": processed,
                                          "scored": scored, "has_more": len(pending_ids) >= limit})
@@ -302,10 +344,9 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response({"status": "error", "message": "URL requerida"}, 400)
                 return
             try:
-                items = fetch_feed_and_parse({
+                inserted = sync_feeds(force=True, feeds=[{
                     "feed_url": feed_url, "feed_type": body.get("feed_type", "rss"),
-                    "id": body.get("feed_id")})
-                inserted = batch_save_items(items) if items else 0
+                    "id": body.get("feed_id")}])
                 self.send_json_response({"status": "success", "new_items": inserted})
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
@@ -313,7 +354,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
 
         if path == "/api/feeds/sync":
             offset = int(body.get("offset", 0))
-            limit = int(body.get("limit", 15))
+            limit = int(body.get("limit", 40))
             try:
                 feeds = fetch_feeds(user_id)
                 if not feeds:
@@ -322,20 +363,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
 
                 total_feeds = len(feeds)
                 batch_slice = feeds[offset:offset + limit]
-                all_new_items = []
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-                    futures = [executor.submit(fetch_feed_and_parse, f) for f in batch_slice]
-                    for fut in concurrent.futures.as_completed(futures, timeout=7.5):
-                        try:
-                            items = fut.result()
-                            if items:
-                                all_new_items.extend(items)
-                        except Exception as e:
-                            print(f"Sync de feed falló: {e}")
-                            continue
-
-                inserted_count = batch_save_items(all_new_items) if all_new_items else 0
+                inserted_count = sync_feeds(batch_slice)
                 self.send_json_response({
                     "status": "success", "offset": offset, "batch_size": len(batch_slice),
                     "total_feeds": total_feeds, "new_items": inserted_count,
@@ -367,24 +395,11 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                         failed_feeds.append({"title": f.get("title"), "error": str(e)})
                         print(f"OPML import: fallo al registrar '{f.get('title')}': {e}")
 
-                initial_items = []
-                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-                    futures = [executor.submit(fetch_feed_and_parse, f) for f in registered_feeds[:15]]
-                    for fut in concurrent.futures.as_completed(futures, timeout=7.5):
-                        try:
-                            res_items = fut.result()
-                            if res_items:
-                                initial_items.extend(res_items)
-                        except Exception as e:
-                            print(f"OPML import: fallo al descargar items: {e}")
-                            continue
-
                 items_saved = 0
-                if initial_items:
-                    try:
-                        items_saved = batch_save_items(initial_items)
-                    except Exception as e:
-                        print(f"OPML import: fallo al guardar items iniciales: {e}")
+                try:
+                    items_saved = sync_feeds(registered_feeds[:40])
+                except Exception as e:
+                    print(f"OPML import: fallo al guardar items iniciales: {e}")
 
                 self.send_json_response({
                     "status": "success" if registered_feeds else "error",
@@ -427,7 +442,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
 
 def run_server(port=PORT):
     init_db()
-    with socketserver.TCPServer(("", port), FeedCuratorHTTPHandler) as httpd:
+    with socketserver.ThreadingTCPServer(("", port), FeedCuratorHTTPHandler) as httpd:
         print(f"FocusFeed en http://localhost:{port} (Supabase: {is_supabase()})")
         httpd.serve_forever()
 

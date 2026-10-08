@@ -12,6 +12,10 @@ Este archivo decide si el negocio existe. Hoy está sin llenar y esa es la deuda
 | Costo de IA por usuario activo al mes | pendiente | Producto de lo anterior |
 | Margen del plan Pro | pendiente | Precio menos costo de IA menos infraestructura |
 
+## Dato medido
+
+- **Score personal con JEV** (`typesafe/jev-1.13`, 8-oct-2026): USD 0.024 por 1,000 items, 0.4 s de latencia mediana. Un usuario con 1,300 fuentes (unos 18,000 items de entrada) cuesta USD 0.45 calificar todo su corpus una vez; después solo lo nuevo.
+
 ## Palancas de costo, en orden de impacto
 
 1. **Corpus compartido.** El resumen de un artículo se calcula una vez para todos. Sin esto, mil usuarios siguiendo Stratechery pagan mil análisis del mismo texto. Es T1.
