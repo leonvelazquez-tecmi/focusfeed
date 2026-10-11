@@ -58,7 +58,7 @@ correr() {
 restaurar() {
   local dump=$1 filtro=${2:-' DEFAULT ACL '}
   pg_restore -l "$dump" | grep -v ' SCHEMA - public ' | grep -v "$filtro" > "$TMP/lista"
-  pg_restore -L "$TMP/lista" -f "$TMP/restore.sql" "$dump"
+  pg_restore --no-owner -L "$TMP/lista" -f "$TMP/restore.sql" "$dump"
   if psql -X -q -U ff_dueno -d "$BD" --single-transaction -v ON_ERROR_STOP=1 \
        -f "$RAIZ/supabase_limpiar_para_restaurar.sql" -f "$TMP/restore.sql" >/dev/null 2>"$TMP/err"; then
     echo ok
@@ -66,7 +66,7 @@ restaurar() {
     grep -m1 -o "ERROR: .*" "$TMP/err" | sed 's/^ERROR:  *//'
   fi
 }
-reasignar() { sed "s/REEMPLAZA-CON-TU-UUID/$REAL/" "$RAIZ/supabase_reasignar_dueno.sql" | correr; }
+reasignar() { sed "s/REEMPLAZA-CON-TU-CORREO/dueno@ejemplo.com/" "$RAIZ/supabase_reasignar_dueno.sql" | correr; }
 
 check() {
   local nombre=$1 esperado=$2 obtenido=$3
@@ -101,6 +101,7 @@ ROLES_SHIM="anon authenticated service_role supabase_admin ff_dueno"
 ROLES_PREVIOS=$(psql -X -t -A -d postgres -c "SELECT string_agg(rolname, ' ') FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role','supabase_admin','ff_dueno')")
 limpiar_todo() {
   dropdb --if-exists ff_rls_test >/dev/null 2>&1
+  dropdb --if-exists ff_rls_test_private >/dev/null 2>&1
   for r in $ROLES_SHIM; do
     [[ " $ROLES_PREVIOS " == *" $r "* ]] && continue
     psql -X -q -d postgres -c "DROP ROLE IF EXISTS $r" >/dev/null 2>&1 || true
@@ -149,6 +150,17 @@ check "0 permisos de tabla para anon/authenticated" "0" \
 check "columnas etag y last_modified" "2" \
   "$(val "SELECT COUNT(*) FROM information_schema.columns WHERE table_name='feeds' AND column_name IN ('etag','last_modified')")"
 
+echo "v4 · el esquema private de alguien más no se toca"
+# Base aparte: v1 + v2 + un tipo propio en private, antes de v4.
+BD_PRINCIPAL=$BD; BD=ff_rls_test_private
+nueva_bd
+d -f "$RAIZ/supabase_schema_v2.sql" >/dev/null
+d -c "CREATE SCHEMA private; CREATE TYPE private.estado AS ENUM ('a', 'b');" >/dev/null
+contiene "v4 aborta si private tiene un tipo ajeno" "private ya tiene otros objetos" "$(correr < "$RAIZ/supabase_migration_v4_rls.sql")"
+check "y no movió los respaldos" "3" \
+  "$(val "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name LIKE '%_v1_backup'")"
+dropdb "$BD"; BD=$BD_PRINCIPAL
+
 echo "v4 · lo que se cree después tampoco nace abierto"
 d -c "CREATE FUNCTION public.rpc_futura() RETURNS BIGINT LANGUAGE sql SECURITY DEFINER AS 'SELECT COUNT(*) FROM public.user_items';
       CREATE TABLE public.tabla_futura (id INT);" >/dev/null
@@ -184,7 +196,9 @@ contiene "sin entrar con Google, aborta" "entra primero con Google" "$(reasignar
 ITEM_COMUN=$(val "SELECT item_id FROM public.user_items WHERE user_id = '$DUENO' ORDER BY item_id LIMIT 1")
 ITEM_NUEVO=$(val "SELECT id FROM public.items WHERE id NOT IN (SELECT item_id FROM public.user_items WHERE user_id = '$DUENO') LIMIT 1")
 ITEM_NUEVO=${ITEM_NUEVO:-$(val "SELECT MAX(id) FROM public.items")}
-q -c "INSERT INTO auth.users (id, email) VALUES ('$REAL', 'dueno@ejemplo.com');
+# Un tester entró antes que el dueño: queda primero en auth.users.
+q -c "INSERT INTO auth.users (id, email, created_at) VALUES ('$OTRO', 'tester@ejemplo.com', NOW() - INTERVAL '1 day');
+      INSERT INTO auth.users (id, email) VALUES ('$REAL', 'Dueno@Ejemplo.com');
       INSERT INTO public.subscriptions (user_id, feed_id) VALUES ('$REAL', 1), ('$REAL', 2);
       INSERT INTO public.user_items (user_id, item_id, status) VALUES ('$REAL', $ITEM_COMUN, 'reading')
         ON CONFLICT DO NOTHING;
@@ -218,6 +232,15 @@ q -c "UPDATE public.user_items SET status = 'reading', user_rating = 'dislike', 
       UPDATE public.user_items SET status = 'inbox', user_rating = 'love'
        WHERE user_id = '$DUENO' AND item_id = $ITEM_VISTO;
       INSERT INTO public.user_items (user_id, item_id, status) VALUES ('$REAL', $ITEM_VISTO, 'archived');" >/dev/null
+# Guardado viejo + "visto" nuevo; y un 70 sin nota (placeholder de v1) contra un score real nuevo.
+ITEM_GUARDADO=$(val "SELECT item_id FROM public.user_items WHERE user_id = '$DUENO' AND item_id NOT IN ($ITEM_COMUN, $ITEM_NUEVO, $ITEM_AUTO, $ITEM_LIKE, $ITEM_VISTO) ORDER BY item_id LIMIT 1")
+ITEM_PLACE=$(val "SELECT item_id FROM public.user_items WHERE user_id = '$DUENO' AND item_id NOT IN ($ITEM_COMUN, $ITEM_NUEVO, $ITEM_AUTO, $ITEM_LIKE, $ITEM_VISTO, $ITEM_GUARDADO) ORDER BY item_id LIMIT 1")
+q -c "UPDATE public.user_items SET status = 'reading' WHERE user_id = '$DUENO' AND item_id = $ITEM_GUARDADO;
+      INSERT INTO public.user_items (user_id, item_id, status) VALUES ('$REAL', $ITEM_GUARDADO, 'archived');
+      UPDATE public.user_items SET status = 'inbox', relevance_score = 70, curator_note = ''
+       WHERE user_id = '$DUENO' AND item_id = $ITEM_PLACE;
+      INSERT INTO public.user_items (user_id, item_id, relevance_score, curator_note)
+       VALUES ('$REAL', $ITEM_PLACE, 91, 'Coincide con IA.');" >/dev/null
 
 contiene "si la cuenta nueva ya tiene temas, aborta" "ya tiene temas propios" "$(reasignar)"
 q -c "UPDATE public.user_profile SET focus_topics = '[]' WHERE user_id = '$REAL';" >/dev/null
@@ -234,6 +257,12 @@ check "like nuevo no borra el guardado viejo; el comentario viejo se va con su d
   "$(val "SELECT status || '|' || user_rating || '|' || user_feedback_comment FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_LIKE")"
 check "visto nuevo no borra el like viejo" "archived|love" \
   "$(val "SELECT status || '|' || user_rating FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_VISTO")"
+check "un guardado viejo sobrevive a un visto nuevo" "reading" \
+  "$(val "SELECT status FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_GUARDADO")"
+check "el 70 sin nota de v1 no pisa un score real nuevo" "91|Coincide con IA." \
+  "$(val "SELECT relevance_score || '|' || curator_note FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_PLACE")"
+check "el tester que entró primero no recibe nada" "0|0" \
+  "$(val "SELECT (SELECT COUNT(*) FROM public.user_items WHERE user_id = '$OTRO') || '|' || (SELECT COUNT(*) FROM public.user_profile WHERE user_id = '$OTRO' AND plan = 'pro')")"
 check "si las dos siguen la fuente, se queda tu categoría" "Mi IA" \
   "$(val "SELECT custom_category FROM public.subscriptions WHERE user_id = '$REAL' AND feed_id = 1")"
 check "lo que solo hizo la cuenta nueva se conserva" "reading" \
@@ -280,7 +309,14 @@ contiene "si el respaldo existe en los dos esquemas, aborta" "revisa a mano" \
 d -c "DROP TABLE private.items_v1_backup; DROP SCHEMA private;" >/dev/null
 
 echo "rollback v2 (de vuelta a v1)"
+# Un item que llegó después de v2 y nunca recibió score del dueño.
+q -c "INSERT INTO public.items (feed_id, guid, title, url, content_type, ai_processed)
+      VALUES (1, 'post-v2', 'Nuevo', 'https://ejemplo.com/nuevo', 'article', 1);" >/dev/null
 check "rollback v2 corre" "ok" "$(correr < "$RAIZ/supabase_rollback_v2.sql")"
+check "el item posterior a v2 vuelve con 70, no con 0" "70" \
+  "$(val "SELECT relevance_score FROM public.items WHERE guid = 'post-v2'")"
+q -c "DELETE FROM public.items WHERE guid = 'post-v2';" >/dev/null
+contiene "correrlo otra vez da un mensaje claro" "No hay tablas de v2" "$(correr < "$RAIZ/supabase_rollback_v2.sql")"
 check "estado personal de vuelta en items" "$ESTADOS_V1" "$(estados)"
 check "subscriptions borrada" "" "$(val "SELECT to_regclass('public.subscriptions')")"
 check "perfil del dueño con id=1" "1" "$(val "SELECT COUNT(*) FROM user_profile WHERE id = 1")"

@@ -38,26 +38,26 @@ BEGIN
 
     -- Si el uuid no coincide, el UPDATE de abajo no copiaría nada y el DROP
     -- borraría todo el estado desde v2 sin rastro.
-    IF to_regclass('public.user_items') IS NOT NULL
-       AND EXISTS (SELECT 1 FROM public.user_items)
+    -- PL/pgSQL planea el IF completo: si la tabla no existe, un AND no
+    -- alcanza a protegerlo. Por eso los IF van anidados.
+    IF to_regclass('public.user_items') IS NULL OR to_regclass('public.subscriptions') IS NULL THEN
+        RAISE EXCEPTION 'No hay tablas de v2: no hay nada que revertir';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM public.user_items)
        AND NOT EXISTS (SELECT 1 FROM public.user_items WHERE user_id = dueno) THEN
         RAISE EXCEPTION 'Ningún user_item es de %: ¿ya reasignaste a tu uuid real? Cambia la línea dueno', dueno;
     END IF;
 
     -- v1 es de una sola cuenta. Si hay datos de alguien más, volver a v1
     -- los dejaría legibles con la llave anon. Eso no se hace en automático.
-    IF to_regclass('public.subscriptions') IS NOT NULL
-       AND EXISTS (SELECT 1 FROM public.subscriptions WHERE user_id <> dueno) THEN
+    IF EXISTS (SELECT 1 FROM public.subscriptions WHERE user_id <> dueno) THEN
         RAISE EXCEPTION 'Hay suscripciones de otras cuentas: v1 no puede aislarlas. No hay vuelta atrás automática; mándale el error a Claude';
     END IF;
-    IF to_regclass('public.user_items') IS NOT NULL
-       AND EXISTS (SELECT 1 FROM public.user_items WHERE user_id <> dueno) THEN
+    IF EXISTS (SELECT 1 FROM public.user_items WHERE user_id <> dueno) THEN
         RAISE EXCEPTION 'Hay estado de lectura de otras cuentas: el DROP lo borraría. No hay vuelta atrás automática; mándale el error a Claude';
     END IF;
-    IF EXISTS (SELECT 1 FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = 'user_profile'
-                  AND column_name = 'user_id')
-       AND EXISTS (SELECT 1 FROM public.user_profile WHERE user_id IS DISTINCT FROM dueno) THEN
+    IF EXISTS (SELECT 1 FROM public.user_profile WHERE user_id IS DISTINCT FROM dueno) THEN
         RAISE EXCEPTION 'Hay perfiles de otras cuentas: v1 los dejaría legibles con la llave anon';
     END IF;
 
@@ -72,25 +72,29 @@ BEGIN
         ALTER TABLE public.items RENAME COLUMN legacy_curator_note     TO curator_note;
     END IF;
 
-    IF to_regclass('public.user_items') IS NOT NULL THEN
-        UPDATE public.items i
-           SET status                = ui.status,
-               user_rating           = ui.user_rating,
-               user_feedback_comment = ui.user_feedback_comment,
-               feedback_at           = ui.feedback_at,
-               relevance_score       = COALESCE(ui.relevance_score, i.relevance_score),
-               curator_note          = COALESCE(ui.curator_note, i.curator_note)
-          FROM public.user_items ui
-         WHERE ui.item_id = i.id AND ui.user_id = dueno;
-    END IF;
+    UPDATE public.items i
+       SET status                = ui.status,
+           user_rating           = ui.user_rating,
+           user_feedback_comment = ui.user_feedback_comment,
+           feedback_at           = ui.feedback_at,
+           relevance_score       = COALESCE(ui.relevance_score, i.relevance_score),
+           curator_note          = COALESCE(ui.curator_note, i.curator_note)
+      FROM public.user_items ui
+     WHERE ui.item_id = i.id AND ui.user_id = dueno;
+
+    -- Items que llegaron después de v2 y nunca tuvieron score del dueño:
+    -- v1 les ponía 70 al ingerir. Sin esto quedarían en 0, hasta abajo.
+    UPDATE public.items i
+       SET relevance_score = 70
+     WHERE COALESCE(i.relevance_score, 0) = 0
+       AND NOT EXISTS (SELECT 1 FROM public.user_items ui
+                        WHERE ui.item_id = i.id AND ui.user_id = dueno);
 
     -- Después de v2 la categoría de cada fuente vive en subscriptions.
-    IF to_regclass('public.subscriptions') IS NOT NULL THEN
-        UPDATE public.feeds f
-           SET custom_category = s.custom_category
-          FROM public.subscriptions s
-         WHERE s.feed_id = f.id AND s.user_id = dueno;
-    END IF;
+    UPDATE public.feeds f
+       SET custom_category = s.custom_category
+      FROM public.subscriptions s
+     WHERE s.feed_id = f.id AND s.user_id = dueno;
 
     -- v1 lee el perfil con id = 1
     UPDATE public.user_profile SET id = 1 WHERE user_id = dueno AND id <> 1

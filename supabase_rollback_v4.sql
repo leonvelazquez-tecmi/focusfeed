@@ -37,10 +37,12 @@ END $$;
 -- Si private quedó vacío, era solo de v4: fuera.
 DO $$
 BEGIN
-    IF to_regnamespace('private') IS NOT NULL
-       AND NOT EXISTS (SELECT 1 FROM pg_class WHERE relnamespace = to_regnamespace('private'))
-       AND NOT EXISTS (SELECT 1 FROM pg_proc  WHERE pronamespace = to_regnamespace('private')) THEN
-        DROP SCHEMA private;
+    IF to_regnamespace('private') IS NOT NULL THEN
+        BEGIN
+            DROP SCHEMA private;  -- sin CASCADE: falla si tiene algo
+        EXCEPTION WHEN dependent_objects_still_exist THEN
+            RAISE NOTICE 'private tiene otros objetos; se queda';
+        END;
     END IF;
 END $$;
 

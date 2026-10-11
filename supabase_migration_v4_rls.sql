@@ -63,6 +63,12 @@ BEGIN
                  WHERE relnamespace = to_regnamespace('private')
                    AND relname NOT IN ('items_v1_backup', 'feeds_v1_backup', 'user_profile_v1_backup'))
         OR EXISTS (SELECT 1 FROM pg_proc WHERE pronamespace = to_regnamespace('private'))
+        -- tipos y dominios propios (no el tipo fila de una tabla ni sus arreglos)
+        OR EXISTS (SELECT 1 FROM pg_type t
+                    WHERE t.typnamespace = to_regnamespace('private')
+                      AND t.typrelid = 0
+                      AND NOT EXISTS (SELECT 1 FROM pg_type e
+                                       WHERE e.oid = t.typelem AND e.typrelid <> 0))
     ) THEN
         RAISE EXCEPTION 'El esquema private ya tiene otros objetos: revisa a mano antes de seguir';
     END IF;

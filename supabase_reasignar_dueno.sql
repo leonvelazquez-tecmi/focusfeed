@@ -7,9 +7,10 @@
 -- tu historial a ese uuid y te pone en plan pro.
 --
 -- CÓMO
---   1. Entra a la app con Google. En el SQL editor, busca tu uuid:
---        SELECT id, email FROM auth.users ORDER BY created_at;
---   2. Sustituye REEMPLAZA-CON-TU-UUID abajo (una sola vez).
+--   1. Sigue el orden de docs/runbook_T2.md, "Después del login".
+--   2. Sustituye REEMPLAZA-CON-TU-CORREO abajo por el correo de Google
+--      con el que entraste. Se busca por correo, no por uuid copiado a
+--      mano: así el historial no puede terminar en la cuenta de otro.
 --   3. Corre el archivo completo. Si algo no cuadra, aborta solo.
 --
 -- QUÉ HACE CON LO QUE YA HICISTE CON LA CUENTA NUEVA
@@ -18,10 +19,10 @@
 --       siguen la misma, se queda tu categoría vieja.
 --     · items, campo por campo: lo que la app generó sola en la cuenta
 --       nueva (score de IA) no pisa tu historial. Si en la cuenta nueva
---       cambiaste el estado (guardado, visto), gana ese estado; si diste
---       un rating, gana ese rating con su comentario. Lo que no tocaste se
---       queda como estaba. El score de IA viejo gana (se hizo con tu perfil
---       real; el nuevo, con un perfil vacío).
+--       cambiaste el estado, gana ese estado, salvo que el viejo fuera
+--       guardado: un guardado nunca se pierde. Si diste un rating, gana ese
+--       rating con su comentario. Lo que no tocaste se queda como estaba.
+--       El score de IA viejo gana si es real (hecho con tus temas).
 --     · perfil: se queda el viejo (temas y preferencias aprendidas). Si en
 --       la cuenta nueva ya escribiste temas, el script aborta y te avisa,
 --       para que decidas tú. Lo que la cuenta nueva aprendió de tus likes
@@ -37,14 +38,16 @@ DECLARE
     -- El uuid donde quedó tu historial. Es este, salvo que el paso 1 del
     -- runbook haya mostrado otro en `duenos_v2`.
     viejo UUID := '00000000-0000-0000-0000-000000000001';
-    nuevo UUID := 'REEMPLAZA-CON-TU-UUID';
+    correo TEXT := 'REEMPLAZA-CON-TU-CORREO';
+    nuevo UUID;
     n_subs INTEGER;
 BEGIN
+    SELECT id INTO nuevo FROM auth.users WHERE lower(email) = lower(correo);
+    IF nuevo IS NULL THEN
+        RAISE EXCEPTION 'No hay cuenta con el correo %: entra primero con Google', correo;
+    END IF;
     IF nuevo = viejo THEN
         RAISE EXCEPTION 'El uuid nuevo es igual al provisional';
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE id = nuevo) THEN
-        RAISE EXCEPTION 'No existe % en auth.users: entra primero con Google', nuevo;
     END IF;
     SELECT COUNT(*) INTO n_subs FROM public.subscriptions WHERE user_id = viejo;
     IF n_subs = 0 THEN
@@ -75,7 +78,11 @@ BEGIN
     -- guardado viejo, ni un "visto" nuevo borra un like viejo.
     -- La app guarda '' (no NULL) como comentario en cada rating.
     UPDATE public.user_items n
-       SET status = CASE WHEN n.status = 'inbox' THEN v.status ELSE n.status END,
+       -- Un guardado viejo sobrevive a un "visto" nuevo: en la cuenta nueva
+       -- no sabías que ya lo tenías guardado.
+       SET status = CASE WHEN v.status = 'reading' THEN 'reading'
+                         WHEN n.status = 'inbox' THEN v.status
+                         ELSE n.status END,
            user_rating = CASE WHEN COALESCE(n.user_rating, 'none') = 'none'
                               THEN v.user_rating ELSE n.user_rating END,
            -- El comentario va con el rating que gana, no por separado.
@@ -83,11 +90,16 @@ BEGIN
                                         THEN v.user_feedback_comment ELSE n.user_feedback_comment END,
            feedback_at = CASE WHEN COALESCE(n.user_rating, 'none') = 'none'
                               THEN v.feedback_at ELSE n.feedback_at END,
-           -- El score nuevo se calculó con el perfil vacío de la cuenta nueva,
-           -- que se descarta abajo. Gana el viejo, hecho con tu perfil real.
-           relevance_score = COALESCE(v.relevance_score, n.relevance_score),
-           curator_note = CASE WHEN v.relevance_score IS NOT NULL
-                               THEN v.curator_note ELSE n.curator_note END
+           -- El score nuevo se calculó con los temas por default de la cuenta
+           -- nueva; el viejo, con tus temas. Gana el viejo cuando es un score
+           -- real (siempre trae nota). El 70 sin nota que v1 ponía al ingerir
+           -- es un placeholder: ahí gana el nuevo.
+           relevance_score = CASE WHEN COALESCE(v.curator_note, '') <> ''
+                                  THEN v.relevance_score
+                                  ELSE COALESCE(n.relevance_score, v.relevance_score) END,
+           curator_note = CASE WHEN COALESCE(v.curator_note, '') <> ''
+                               THEN v.curator_note
+                               ELSE COALESCE(n.curator_note, v.curator_note) END
       FROM public.user_items v
      WHERE n.user_id = nuevo AND v.user_id = viejo AND v.item_id = n.item_id;
     DELETE FROM public.user_items v

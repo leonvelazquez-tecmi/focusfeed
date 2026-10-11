@@ -15,7 +15,7 @@ Archivos:
 | `supabase_rollback_v2.sql` | Regresa a v1. Solo con código anterior a T1. |
 | `supabase_reasignar_dueno.sql` | Después del login: fusiona tu historial en tu uuid de Google. |
 | `supabase_limpiar_para_restaurar.sql` | Solo para restaurar el respaldo. Borra datos. |
-| `tests/rls/probar_migraciones.sh` | Prueba todo lo anterior en un Postgres local, incluida la restauración (85 verificaciones, corriendo como un dueño sin superusuario, igual que el SQL editor). |
+| `tests/rls/probar_migraciones.sh` | Prueba todo lo anterior en un Postgres local, incluida la restauración (92 verificaciones, corriendo como un dueño sin superusuario, igual que el SQL editor). |
 
 ---
 
@@ -101,9 +101,7 @@ pg_restore --list "$F" | grep -c 'TABLE DATA'
 echo "$F"
 ```
 
-Anota la ruta que imprime el último comando: es la que usa la restauración.
-
-El último comando debe dar al menos 3 (`feeds`, `items`, `user_profile`).
+El penúltimo comando (el conteo) debe dar al menos 3 (`feeds`, `items`, `user_profile`). El último imprime la ruta del respaldo: anótala, es la que usa la restauración.
 
 ## Paso 3 · Correr v2 (solo si el paso 1 lo pidió)
 
@@ -181,7 +179,7 @@ Todo va en **una sola transacción**: la limpieza y el restore entran juntos o n
 F=<la ruta que anotaste en el paso 2>
 cd ~/focusfeed_respaldos
 pg_restore -l "$F" | grep -v ' SCHEMA - public ' | grep -v ' DEFAULT ACL ' > lista.txt
-pg_restore -L lista.txt -f restore.sql "$F"
+pg_restore --no-owner -L lista.txt -f restore.sql "$F"
 read -s PGURL
 psql "$PGURL" --single-transaction -v ON_ERROR_STOP=1 \
   -f "<carpeta del repo>/supabase_limpiar_para_restaurar.sql" -f restore.sql
@@ -199,17 +197,17 @@ Si `psql` termina sin errores, la base está como al momento del respaldo, permi
 
 ## Después del login (cuando el PR B esté en producción)
 
-1. Entra a la app con tu cuenta de Google.
-2. SQL Editor: `SELECT id, email FROM auth.users ORDER BY created_at;` y copia tu `id`.
-3. Abre `supabase_reasignar_dueno.sql`, sustituye `REEMPLAZA-CON-TU-UUID` (y `viejo`, si el paso 1 mostró otro uuid en `duenos_v2`) y córrelo. Fusiona lo que hayas hecho con la cuenta nueva con tu historial y te pone en plan `pro`.
-4. Apunta el respaldo `OWNER FALLBACK` a tu cuenta real hasta que el PR C lo borre. Si no, cualquier sesión sin login (por ejemplo la PWA del iPhone antes de entrar) cae en el uuid provisional, ya vacío, y la app le crea fuentes semilla:
+El orden importa. Mientras exista `OWNER FALLBACK` (hasta el PR C), una sesión sin login cae en el uuid de `FOCUSFEED_OWNER_ID`, que es donde vive tu historial. Por eso primero se cierra esa puerta y al final se mueve el historial.
+
+1. Entra con tu cuenta de Google **en cada dispositivo** donde usas FocusFeed: la PWA del iPhone y el navegador del escritorio. Así ninguno sigue entrando sin login.
+2. Mergea el PR C (borra `OWNER FALLBACK`). Desde ahí, un request sin token válido responde 401 y no ve datos de nadie.
+3. Abre `supabase_reasignar_dueno.sql` y sustituye `REEMPLAZA-CON-TU-CORREO` por tu correo de Google (y `viejo`, si el paso 1 mostró otro uuid en `duenos_v2`). SQL Editor → Run. El script busca tu cuenta por correo: no hay uuid que copiar a mano. Fusiona lo que hayas hecho con la cuenta nueva con tu historial y te pone en plan `pro`.
+4. La variable ya no sirve. Bórrala y haz redeploy desde el dashboard (paso 0):
 
 ```bash
 vercel env rm FOCUSFEED_OWNER_ID production --yes
-printf %s "<tu uuid>" | vercel env add FOCUSFEED_OWNER_ID production
 ```
 
-   Y redeploy desde el dashboard (paso 0).
-5. Recarga la app: debes ver tus fuentes y tu historial.
+5. Recarga la app en cada dispositivo: debes ver tus fuentes y tu historial.
 
 Las credenciales de Google y las variables de Vercel del login vienen en el PR B.
