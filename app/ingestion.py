@@ -15,7 +15,8 @@ NAMESPACES = {
     'yt': 'http://www.youtube.com/xml/schemas/2015',
     'media': 'http://search.yahoo.com/mrss/',
     'content': 'http://purl.org/rss/1.0/modules/content/',
-    'dc': 'http://purl.org/dc/elements/1.1/'
+    'dc': 'http://purl.org/dc/elements/1.1/',
+    'itunes': 'http://www.itunes.com/dtds/podcast-1.0.dtd'
 }
 
 HEADERS = {
@@ -115,6 +116,51 @@ def _fallback_title(text: str) -> str:
     return "Sin título"
 
 
+_IMG_RE = re.compile(r'<img[^>]+?src=["\']([^"\']+)["\']', re.IGNORECASE)
+_IMG_EXT = re.compile(r'\.(jpe?g|png|webp|gif|avif)(\?|$)', re.IGNORECASE)
+
+
+def _is_image(el) -> bool:
+    medium = (el.get('medium') or '').lower()
+    mime = (el.get('type') or '').lower()
+    if medium == 'image' or mime.startswith('image/'):
+        return True
+    return not medium and not mime and bool(_IMG_EXT.search(el.get('url') or ''))
+
+
+def _image_for(el, raw_html: str = "") -> str:
+    """Imagen de un item RSS/Atom, de la más explícita a la más débil:
+    media:content, media:thumbnail (sueltos o en media:group), enclosure de
+    imagen, itunes:image del episodio y, al final, el primer <img> del HTML.
+    Si no hay, queda vacío y el sync prueba con og:image de la página."""
+    for path in ('media:content', 'media:group/media:content'):
+        for m in el.findall(path, NAMESPACES):
+            if m.get('url') and _is_image(m):
+                return m.get('url')
+    for path in ('media:thumbnail', 'media:group/media:thumbnail', 'media:content/media:thumbnail'):
+        t = el.find(path, NAMESPACES)
+        if t is not None and t.get('url'):
+            return t.get('url')
+    for enc in el.findall('enclosure') + el.findall('atom:link[@rel="enclosure"]', NAMESPACES):
+        href = enc.get('url') or enc.get('href') or ''
+        if href and (enc.get('type') or '').lower().startswith('image/'):
+            return href
+    it = el.find('itunes:image', NAMESPACES)
+    if it is not None and it.get('href'):
+        return it.get('href')
+    m = _IMG_RE.search(raw_html or "")
+    if m and not m.group(1).startswith('data:'):
+        return m.group(1).replace('&amp;', '&')
+    return ""
+
+
+def _is_podcast(el) -> bool:
+    for enc in el.findall('enclosure') + el.findall('atom:link[@rel="enclosure"]', NAMESPACES):
+        if (enc.get('type') or '').lower().startswith('audio/'):
+            return True
+    return False
+
+
 def parse_youtube_feed_xml(xml_text: str, feed_id: int):
     items = []
     try:
@@ -182,9 +228,9 @@ def parse_rss_feed_xml(xml_text: str, feed_id: int):
                     "author": _text(entry, 'atom:author/atom:name') or "Autor",
                     "published_at": (_text(entry, 'atom:published') or _text(entry, 'atom:updated')
                                      or datetime.utcnow().isoformat()),
-                    "content_type": "article",
+                    "content_type": "podcast" if _is_podcast(entry) else "article",
                     "video_id": None,
-                    "thumbnail_url": "",
+                    "thumbnail_url": _image_for(entry, raw_html),
                     "raw_content": cleaned["text"],
                     "transcript": cleaned["text"]
                 })
@@ -194,11 +240,15 @@ def parse_rss_feed_xml(xml_text: str, feed_id: int):
         channel = root.find('channel')
         if channel is None:
             channel = root
+        # Portada del podcast: respaldo si el episodio no trae imagen propia.
+        ch_img = channel.find('itunes:image', NAMESPACES)
+        channel_image = (ch_img.get('href') if ch_img is not None else "") or _text(channel, 'image/url')
         for item_el in channel.findall('item'):
             try:
                 url = _text(item_el, 'link')
                 raw_html = _text(item_el, 'content:encoded') or _text(item_el, 'description')
                 cleaned = clean_html_article(raw_html)
+                podcast = _is_podcast(item_el)
 
                 items.append({
                     "feed_id": feed_id,
@@ -207,9 +257,9 @@ def parse_rss_feed_xml(xml_text: str, feed_id: int):
                     "url": url,
                     "author": _text(item_el, 'dc:creator', 'author') or "Autor",
                     "published_at": _text(item_el, 'pubDate') or datetime.utcnow().isoformat(),
-                    "content_type": "article",
+                    "content_type": "podcast" if podcast else "article",
                     "video_id": None,
-                    "thumbnail_url": "",
+                    "thumbnail_url": _image_for(item_el, raw_html) or (channel_image if podcast else ""),
                     "raw_content": cleaned["text"],
                     "transcript": cleaned["text"]
                 })

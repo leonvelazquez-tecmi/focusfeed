@@ -16,12 +16,14 @@ from app.storage import (
     fetch_items, set_item_status, bulk_set_status,
     fetch_feeds, fetch_all_active_feeds, create_or_update_feed, unsubscribe,
     fetch_profile, save_profile_data, batch_save_items,
-    ensure_seed_if_empty, get_pending_item_ids, usage_summary, save_feed_cache
+    ensure_seed_if_empty, get_pending_item_ids, usage_summary, save_feed_cache,
+    get_existing_guids
 )
 from app.ingestion import (
     parse_youtube_feed_xml, parse_rss_feed_xml,
     parse_opml, resolve_feed_url, HEADERS
 )
+from app.extractors import fetch_og_image
 from app.ai_engine import (
     process_item_ai, record_feedback, score_pending_for_user, ai_health, ai_canary,
     RATING_TO_STATUS
@@ -109,6 +111,40 @@ def is_fresh(feed: dict) -> bool:
         return False
 
 
+OG_IMAGE_CAP = 40  # páginas por tanda: cuidan el presupuesto de 45 s del cron
+
+
+def only_new(items: list) -> list:
+    """Items cuyo guid todavía no está en el corpus."""
+    if not items:
+        return []
+    already = get_existing_guids([i.get("feed_id") for i in items])
+    return [i for i in items if i["guid"] not in already]
+
+
+def enrich_images(items: list, timeout: float = 4) -> None:
+    """Artículos sin imagen en el feed: toma og:image de la página, en paralelo
+    y con tope. Lo que no alcance a resolverse se queda con el respaldo de
+    color en la tarjeta. Timeout corto a propósito: la última tanda del cron
+    puede arrancar en el segundo 44 y la función muere a los 60."""
+    missing = [i for i in items if not i.get("thumbnail_url") and i.get("url")][:OG_IMAGE_CAP]
+    if not missing:
+        return
+
+    def resolve(item):
+        item["thumbnail_url"] = fetch_og_image(item["url"], timeout=3.5)
+
+    run_parallel(resolve, missing, workers=16, timeout=timeout)
+
+
+def prepare_new_items(items: list) -> list:
+    """Solo lo nuevo, ya con imagen. Se corre antes de batch_save_items porque
+    ese insert nunca actualiza items existentes."""
+    fresh = only_new(items)
+    enrich_images(fresh)
+    return fresh
+
+
 def sync_feeds(feeds: list, timeout: float = 12, force: bool = False) -> int:
     """Descarga feeds en paralelo, guarda los items nuevos y la caché HTTP de
     cada feed. Salta los sincronizados hace menos de 15 min salvo force.
@@ -116,7 +152,7 @@ def sync_feeds(feeds: list, timeout: float = 12, force: bool = False) -> int:
     if not force:
         feeds = [f for f in feeds if not is_fresh(f)]
     batches = run_parallel(fetch_feed_and_parse, feeds, workers=16, timeout=timeout)
-    new_items = [i for b in batches for i in (b or [])]
+    new_items = prepare_new_items([i for b in batches for i in (b or [])])
     for f in feeds:
         if f.get("_fetched"):
             try:
@@ -346,6 +382,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
 
                 items = fetch_feed_and_parse(
                     {"feed_url": resolved_feed_url, "feed_type": detected_type, "id": feed_id})
+                items = prepare_new_items(items)
                 saved = batch_save_items(items) if items else 0
                 self.send_json_response({"status": "success", "feed_id": feed_id, "new_items": saved})
             except Exception as e:
