@@ -4,8 +4,8 @@
   "description": "Tu feed curado por IA, que aterriza en tu vault",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f4f5f7",
-  "theme_color": "#ffffff",
+  "background_color": "#f3f1ec",
+  "theme_color": "#f3f1ec",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/3669/3669986.png",

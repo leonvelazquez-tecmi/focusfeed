@@ -1,6 +1,6 @@
 # Roadmap
 
-Actualizado: 8-oct-2026
+Actualizado: 11-oct-2026
 
 ## Objetivo de este ciclo
 
@@ -29,6 +29,11 @@ La línea de llegada del ciclo: dos cuentas distintas, cada una con sus fuentes 
 - Tandas de 40 feeds, 16 descargas en paralelo, 3 tandas a la vez desde el cliente. Feeds sincronizados hace menos de 15 min se saltan (YouTube no manda ETag, publica con `max-age=900`); los que sí mandan ETag o Last-Modified se piden condicionales.
 - La app sincroniza sola al abrir si pasaron más de 30 min, sin bloquear el feed.
 - Medido local: antes 172 fuentes en 8 s; ahora 1,344 fuentes en 11 s y la repetición en 3 s.
+
+**T10. Feed visual y sin ruido.** Hecho el 11-oct, en tres PRs.
+- Imagen en cada tarjeta: RSS/Atom ahora trae media:content, media:thumbnail, enclosure, itunes:image o el primer `<img>`; lo nuevo sin imagen pasa por og:image. Respaldo de color por fuente. `routines/backfill_images.py` para lo ya guardado.
+- Shorts de YouTube fuera: `app/shorts.py` (HEAD a `/shorts/<id>`). `routines/clean_shorts.py` archivó los existentes.
+- Rediseño editorial estilo radio independiente (NTS, Freaks Only FM). Sale de "fuera de alcance" por decisión de León; ver `context/decisiones.md`.
 
 ## En curso
 
@@ -66,7 +71,6 @@ Escrito a propósito, para que no se construya de más:
 - App nativa
 - Integraciones que no sean Obsidian
 - Migrar a Next.js
-- Rediseño visual
 - Más proveedores de IA
 - Cobros
 
