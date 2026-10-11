@@ -45,3 +45,11 @@ Qué se tomó de cada uno, medido en el navegador:
 - **Freaks Only FM:** JetBrains Mono para todo lo funcional, #0a0a0a con un solo acento rojo (#dc2828), sombras duras desplazadas (4 a 8 px, sin difuminar), cero radios, ticker en marquesina de "now playing" y punto en vivo que pulsa.
 
 Aplicación: Archivo Narrow (sustituto libre de Univers Condensed) para titulares, JetBrains Mono para metadatos y botones, papel #f3f1ec en claro y negro #0a0a0a en oscuro, rojo señal como único acento. Imagen 16:10 a todo el ancho de cada tarjeta, rejilla de 1, 2 o 3 columnas (375, 760 y 1100 px). Movimiento: entrada escalonada de tarjetas, zoom de imagen y subrayado rojo al pasar, ticker con los titulares del lote. Todo se apaga con `prefers-reduced-motion`.
+
+## 2026-10-11 · Migrar a cuenta personal al decidir el lanzamiento
+
+Ajusta el disparador del 17-ago ("el repo se queda por ahora en la cuenta institucional"). El disparador ya no es que `customers/` tenga nombres ni la primera línea de Stripe: es la decisión de lanzar. Hasta entonces repo, Vercel, Supabase y Drive siguen en la cuenta institucional.
+
+Qué se mueve: repo de GitHub, proyecto de Vercel, proyecto de Supabase y la carpeta de Drive. Stripe o Ko-fi se abren directo en la cuenta personal.
+
+Condición previa y detalle: en el brief de pago voluntario v1.1, fuera del repo.
