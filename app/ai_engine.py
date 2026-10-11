@@ -298,22 +298,31 @@ def process_item_ai(item_id: int, user_id_for_billing=None):
 
 
 def score_pending_for_user(user_id: str, limit: int = 40):
-    """Pone score personal a los items que este usuario todavía no tiene calificados."""
+    """Pone score personal a los items nuevos que este usuario todavía no tiene calificados.
+
+    Se mira la bandeja (los más recientes primero), no "Para ti": esa pestaña
+    ordena por score, así que los items sin calificar quedaban siempre fuera de
+    la ventana y nunca se calificaban.
+    """
+    from concurrent.futures import ThreadPoolExecutor
     from app.storage import fetch_items, fetch_profile, save_user_score
 
     profile = fetch_profile(user_id)
-    data = fetch_items(user_id, tab="curated", limit=limit)
-    scored = 0
-    for item in data.get("items", []):
-        if item.get("relevance_score") is not None:
-            continue
+    data = fetch_items(user_id, tab="inbox", limit=limit * 4)
+    pendientes = [i for i in data.get("items", []) if i.get("relevance_score") is None][:limit]
+
+    def calificar(item):
         result = score_for_user(item, profile)
         jev_score = score_with_jev(item, profile, user_id)
         if jev_score is not None:
             result["relevance_score"] = jev_score
-        save_user_score(user_id, item["id"], result["relevance_score"], result["curator_note"])
-        scored += 1
-    return scored
+        return item["id"], result
+
+    with ThreadPoolExecutor(8) as ex:
+        resultados = list(ex.map(calificar, pendientes))
+    for item_id, result in resultados:
+        save_user_score(user_id, item_id, result["relevance_score"], result["curator_note"])
+    return len(resultados)
 
 
 # Qué le pasa al item en el feed según cómo lo califiques.
