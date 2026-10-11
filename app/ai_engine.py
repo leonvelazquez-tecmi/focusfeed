@@ -33,7 +33,7 @@ JEV_MODEL = "typesafe/jev-1.13"
 PRICE_IN_PER_MTOK = float(os.environ.get("AI_PRICE_IN_PER_MTOK", "0"))
 PRICE_OUT_PER_MTOK = float(os.environ.get("AI_PRICE_OUT_PER_MTOK", "0"))
 
-GEMINI_MODEL = os.environ.get("AI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.environ.get("AI_MODEL", "gemini-3.5-flash")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 STOPWORDS = {
