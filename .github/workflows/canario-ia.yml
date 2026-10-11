@@ -1,0 +1,33 @@
+name: Canario de IA
+# Una vez al día revisa que Gemini y JEV sigan respondiendo en producción.
+# Si fallan, abre un issue en este repo (GitHub te avisa por correo).
+on:
+  schedule:
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  canario:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Revisar /api/health/ai
+        id: salud
+        run: |
+          code=$(curl -s -m 60 -o salud.json -w "%{http_code}" https://focusfeed-olive.vercel.app/api/health/ai || true)
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          cat salud.json || true
+      - name: Abrir issue si falla
+        if: steps.salud.outputs.code != '200'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh issue list --repo "$GITHUB_REPOSITORY" --label canario-ia --state open --json number --jq 'length' | grep -qv '^0$'; then
+            echo "Ya hay un issue abierto"; exit 0
+          fi
+          gh label create canario-ia --repo "$GITHUB_REPOSITORY" --color B60205 2>/dev/null || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --label canario-ia \
+            --title "La IA de FocusFeed falló en producción" \
+            --body "El canario diario devolvió HTTP ${{ steps.salud.outputs.code }}. Respuesta: $(cat salud.json 2>/dev/null | head -c 800). Revisa el modelo de Gemini (AI_MODEL) o la llave de OpenRouter."

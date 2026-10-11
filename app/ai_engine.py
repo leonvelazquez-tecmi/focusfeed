@@ -33,7 +33,18 @@ JEV_MODEL = "typesafe/jev-1.13"
 PRICE_IN_PER_MTOK = float(os.environ.get("AI_PRICE_IN_PER_MTOK", "0"))
 PRICE_OUT_PER_MTOK = float(os.environ.get("AI_PRICE_OUT_PER_MTOK", "0"))
 
-GEMINI_MODEL = os.environ.get("AI_MODEL", "gemini-3.5-flash")
+# Modelo de Gemini: AI_MODEL lo fija a mano; si no, se resuelve contra la lista
+# viva de la API (ver _resolve_gemini_model) para que un retiro no rompa la app.
+GEMINI_MODEL_OVERRIDE = os.environ.get("AI_MODEL", "")
+GEMINI_MODEL_FALLBACK = "gemini-3.5-flash"
+GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
+_MODELO_EXCLUIDO = ("preview", "image", "tts", "live", "embedding", "audio", "exp",
+                    "thinking", "computer", "robotics", "vision")
+
+# Salud de la IA: la falla del modelo no se puede quedar callada detrás del respaldo.
+AI_HEALTH = {"gemini_model": None, "last_error": None, "last_error_at": None}
+_MODEL_CACHE = {"name": None}
+_ULTIMO_REGISTRO = {}
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 STOPWORDS = {
@@ -71,6 +82,111 @@ def _keywords_from_topics(topics: list) -> dict:
 # Universal: resumen del item
 # ==========================================================
 
+
+def _note_error(source: str, err, model: str = "", user_id=None):
+    """Deja la falla a la vista: /api/status y una fila ai_usage kind=ai_error."""
+    from datetime import datetime, timezone
+    AI_HEALTH["last_error"] = f"{source}: {err}"
+    AI_HEALTH["last_error_at"] = datetime.now(timezone.utc).isoformat()
+    ahora = time.time()
+    if ahora - _ULTIMO_REGISTRO.get(source, 0) < 600:  # una fila por fuente cada 10 min
+        return
+    _ULTIMO_REGISTRO[source] = ahora
+    try:
+        from app.storage import log_ai_usage
+        log_ai_usage(user_id, None, model or source, kind="ai_error")
+    except Exception:
+        pass
+
+
+def _version_key(name: str):
+    m = re.search(r"gemini-(\d+(?:\.\d+)*)", name)
+    ver = tuple(int(x) for x in m.group(1).split(".")) if m else (0,)
+    return (ver, "lite" not in name)
+
+
+def _list_flash_models() -> list:
+    url = f"{GEMINI_BASE}/models?key={GEMINI_API_KEY}&pageSize=200"
+    with urllib.request.urlopen(url, timeout=10) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    nombres = []
+    for m in data.get("models", []):
+        name = (m.get("name") or "").replace("models/", "")
+        if ("flash" in name and name.startswith("gemini-")
+                and "generateContent" in (m.get("supportedGenerationMethods") or [])
+                and not any(x in name for x in _MODELO_EXCLUIDO)):
+            nombres.append(name)
+    return sorted(nombres, key=_version_key, reverse=True)
+
+
+def _resolve_gemini_model(exclude=None) -> str:
+    """Modelo vigente: AI_MODEL, o el flash más nuevo de la lista viva de la API."""
+    exclude = set(exclude or [])
+    if GEMINI_MODEL_OVERRIDE and GEMINI_MODEL_OVERRIDE not in exclude:
+        return GEMINI_MODEL_OVERRIDE
+    if _MODEL_CACHE["name"] and _MODEL_CACHE["name"] not in exclude:
+        return _MODEL_CACHE["name"]
+    try:
+        for name in _list_flash_models():
+            if name not in exclude:
+                _MODEL_CACHE["name"] = name
+                AI_HEALTH["gemini_model"] = name
+                return name
+    except Exception as e:
+        _note_error("gemini_list_models", e)
+    return GEMINI_MODEL_FALLBACK
+
+
+def _gemini_generate(model: str, prompt: str, timeout: int = 15) -> dict:
+    url = f"{GEMINI_BASE}/models/{model}:generateContent?key={GEMINI_API_KEY}"
+    payload = {"contents": [{"parts": [{"text": prompt}]}],
+               "generationConfig": {"response_mime_type": "application/json"}}
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _gemini_with_recovery(prompt: str, timeout: int = 15):
+    """Llama a Gemini; si el modelo ya no existe, resuelve otro y reintenta una vez."""
+    model = _resolve_gemini_model()
+    try:
+        return model, _gemini_generate(model, prompt, timeout)
+    except urllib.error.HTTPError as e:
+        if e.code not in (400, 403, 404):
+            raise
+        _note_error("gemini_model", f"{model} HTTP {e.code}", model)
+        _MODEL_CACHE["name"] = None
+        otro = _resolve_gemini_model(exclude={model})
+        if otro == model:
+            raise
+        return otro, _gemini_generate(otro, prompt, timeout)
+
+
+def ai_health() -> dict:
+    return {"ai_model": GEMINI_MODEL_OVERRIDE or _MODEL_CACHE["name"] or None,
+            "ai_last_error": AI_HEALTH["last_error"],
+            "ai_last_error_at": AI_HEALTH["last_error_at"]}
+
+
+def ai_canary() -> dict:
+    """Prueba mínima de Gemini y JEV. Alimenta el cron diario y el aviso en GitHub."""
+    res = {"gemini": "sin_llave", "jev": "sin_llave"}
+    if GEMINI_API_KEY:
+        try:
+            model, _ = _gemini_with_recovery('Responde solo {"ok": true}', timeout=15)
+            res["gemini"] = f"ok:{model}"
+        except Exception as e:
+            res["gemini"] = f"error:{e}"
+            _note_error("canary_gemini", e)
+    if OPENROUTER_API_KEY:
+        p = score_with_jev({"id": None, "title": "prueba", "author": "canario",
+                            "content_type": "article"}, {"focus_topics": ["IA"]}, None)
+        res["jev"] = "ok" if p is not None else "error"
+    return res
+
+
 def analyze_content(title: str, author: str, content_type: str, content_text: str,
                     user_id_for_billing=None, item_id_for_billing=None) -> dict:
     """Resumen, ideas clave y tags. Sin score: eso es personal."""
@@ -103,17 +219,7 @@ Devuelve exactamente esta estructura:
 No incluyas juicio sobre a quién le sirve: eso se decide después, por lector."""
 
     try:
-        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-               f"{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}")
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"response_mime_type": "application/json"}
-        }
-        req = urllib.request.Request(
-            url, data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=15) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        modelo, data = _gemini_with_recovery(prompt)
 
         raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
         parsed = json.loads(raw_text)
@@ -123,7 +229,7 @@ No incluyas juicio sobre a quién le sirve: eso se decide después, por lector."
         output_tokens = int(usage.get("candidatesTokenCount", 0))
         try:
             from app.storage import log_ai_usage
-            log_ai_usage(user_id_for_billing, item_id_for_billing, GEMINI_MODEL,
+            log_ai_usage(user_id_for_billing, item_id_for_billing, modelo,
                          input_tokens, output_tokens,
                          _estimate_cost(input_tokens, output_tokens))
         except Exception:
@@ -136,6 +242,7 @@ No incluyas juicio sobre a quién le sirve: eso se decide después, por lector."
         }
     except Exception as e:
         print(f"analyze_content: el modelo falló, se usa el motor de respaldo: {e}")
+        _note_error("analyze_content", e)
         return None
 
 
@@ -270,6 +377,7 @@ def score_with_jev(item: dict, profile: dict, user_id=None):
         except (urllib.error.URLError, KeyError, ValueError, TypeError) as e:
             if intento == 1:
                 print(f"score_with_jev: falló, se usa el heurístico: {e}")
+                _note_error("jev", e, JEV_MODEL, user_id)
             else:
                 time.sleep(1)
     return None
