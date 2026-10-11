@@ -76,6 +76,8 @@ Escrito a propósito, para que no se construya de más:
 
 ## Deuda conocida
 
+- **"Para ti" sube artículos de 2023 a 2025.** El score no pesa la antigüedad. Las imágenes de esos items se piden bajo demanda (`/api/items/fill-images`), no con un llenado del histórico. Arreglar el orden toca el score de IA: pregunta primero.
+
 - **La IA sigue sin correr en producción.** La causa original (las credenciales se perdían en `fetch_profile`) ya está arreglada: ahora la llave se lee de `GEMINI_API_KEY` del entorno. Falta ponerla en Vercel y decidir el modelo definitivo. Sin esa variable, el motor de respaldo entrega resumen sin modelo y score determinista.
 - **RLS apagado y `GRANT ALL` a `anon`** en el esquema v1 que sigue vivo en producción. `supabase_schema_v2.sql` ya lo corrige, pero nadie lo ha corrido todavía.
 - **`OWNER FALLBACK` en `app/auth.py`.** Cualquier request sin token válido se atiende como si fuera el dueño. Es intencional para que la app siga funcionando durante T2, y es lo primero que hay que borrar cuando el acceso esté puesto.

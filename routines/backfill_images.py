@@ -9,7 +9,9 @@ misma base que la app: Supabase si hay variables de entorno, si no SQLite.
 
     python3 routines/backfill_images.py --dry-run          # cuenta y muestra ejemplos
     python3 routines/backfill_images.py                    # escribe (últimos 30 días)
-    python3 routines/backfill_images.py --days 90
+
+Lo más viejo no se llena aquí: la app pide la imagen bajo demanda
+(/api/items/fill-images) solo para las tarjetas que llegan a pantalla.
 """
 
 import os

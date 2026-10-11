@@ -241,6 +241,42 @@ def get_item_by_id(item_id: int):
     return dict(row) if row else None
 
 
+NO_IMAGE = "none"  # ya se buscó og:image y la página no tiene: no volver a pedirla
+
+
+def items_missing_image(item_ids: list):
+    """De esos ids, los artículos y podcasts que aún no tienen imagen ni marca."""
+    ids = sorted({int(i) for i in item_ids if str(i).isdigit()})
+    if not ids:
+        return []
+    if is_supabase():
+        id_list = ",".join(str(i) for i in ids)
+        res = supabase_request(
+            f"items?id=in.({id_list})&content_type=neq.video"
+            "&or=(thumbnail_url.is.null,thumbnail_url.eq.)&select=id,url")
+        return res if isinstance(res, list) else []
+    conn = get_db_connection()
+    ph = ",".join("?" for _ in ids)
+    rows = conn.execute(
+        f"SELECT id, url FROM items WHERE id IN ({ph}) AND content_type != 'video' "
+        "AND COALESCE(thumbnail_url, '') = ''", ids).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def save_item_thumbnail(item_id: int, url: str):
+    """La imagen es del corpus compartido: pública y la misma para todos."""
+    if is_supabase():
+        supabase_request(f"items?id=eq.{int(item_id)}", method="PATCH",
+                         data={"thumbnail_url": url},
+                         headers_extra={"Prefer": "return=minimal"})
+        return
+    conn = get_db_connection()
+    conn.execute("UPDATE items SET thumbnail_url = ? WHERE id = ?", (url, int(item_id)))
+    conn.commit()
+    conn.close()
+
+
 def get_pending_item_ids(limit: int = 10):
     """Items del corpus que nadie ha analizado. El resumen es universal:
     se calcula una vez y sirve para todos los suscriptores."""
