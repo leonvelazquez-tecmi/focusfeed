@@ -149,19 +149,33 @@ def _gemini_generate(model: str, prompt: str, timeout: int = 15) -> dict:
 
 
 def _gemini_with_recovery(prompt: str, timeout: int = 15):
-    """Llama a Gemini; si el modelo ya no existe, resuelve otro y reintenta una vez."""
-    model = _resolve_gemini_model()
-    try:
-        return model, _gemini_generate(model, prompt, timeout)
-    except urllib.error.HTTPError as e:
-        if e.code not in (400, 403, 404):
-            raise
-        _note_error("gemini_model", f"{model} HTTP {e.code}", model)
-        _MODEL_CACHE["name"] = None
-        otro = _resolve_gemini_model(exclude={model})
-        if otro == model:
-            raise
-        return otro, _gemini_generate(otro, prompt, timeout)
+    """Llama a Gemini con recuperación.
+
+    Si el modelo ya no existe (400/403/404) o está saturado (429/5xx/timeout),
+    se salta al siguiente más nuevo de la lista viva, hasta 3 modelos. El que
+    responde queda en caché; el que falló se descarta hasta el próximo arranque.
+    """
+    probados = []
+    ultimo = None
+    for _ in range(3):
+        model = _resolve_gemini_model(exclude=probados)
+        if model in probados:
+            break
+        try:
+            data = _gemini_generate(model, prompt, timeout)
+            _MODEL_CACHE["name"] = model
+            AI_HEALTH["gemini_model"] = model
+            return model, data
+        except urllib.error.HTTPError as e:
+            ultimo = e
+            _note_error("gemini_model", f"{model} HTTP {e.code}", model)
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            ultimo = e
+            _note_error("gemini_model", f"{model} {e}", model)
+        probados.append(model)
+        if _MODEL_CACHE["name"] == model:
+            _MODEL_CACHE["name"] = None
+    raise ultimo
 
 
 def ai_health() -> dict:

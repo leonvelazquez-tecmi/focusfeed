@@ -85,6 +85,25 @@ check("tras un 404 reintenta con el siguiente modelo más nuevo", modelo == "gem
 check("el modelo retirado no vuelve a elegirse", ai._MODEL_CACHE["name"] == "gemini-3.1-flash-lite")
 check("la falla queda a la vista", "gemini-3.5-flash HTTP 404" in (ai.ai_health()["ai_last_error"] or ""))
 
+# 2b) Un modelo saturado (503/429) también salta al siguiente
+reset()
+vistos = []
+
+
+def saturado(req, timeout=0):
+    url = req if isinstance(req, str) else req.full_url
+    if "/models?" in url:
+        return Resp(json.dumps(LISTA).encode())
+    vistos.append(url)
+    if "gemini-3.5-flash:" in url:
+        raise urllib.error.HTTPError(url, 503, "Service Unavailable", {}, io.BytesIO(b"{}"))
+    return Resp(json.dumps(OK).encode())
+
+
+with mock.patch("urllib.request.urlopen", saturado):
+    modelo, _ = ai._gemini_with_recovery("hola")
+check("un 503 salta al siguiente modelo", modelo == "gemini-3.1-flash-lite")
+
 # 3) AI_MODEL manda sobre la resolución automática
 reset()
 ai.GEMINI_MODEL_OVERRIDE = "gemini-manual"
