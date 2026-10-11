@@ -17,7 +17,7 @@ from app.storage import (
     fetch_feeds, fetch_all_active_feeds, create_or_update_feed, unsubscribe,
     fetch_profile, save_profile_data, batch_save_items,
     ensure_seed_if_empty, get_pending_item_ids, usage_summary, save_feed_cache,
-    get_existing_guids
+    get_existing_guids, items_missing_image, save_item_thumbnail, NO_IMAGE
 )
 from app.ingestion import (
     parse_youtube_feed_xml, parse_rss_feed_xml,
@@ -143,6 +143,22 @@ def prepare_new_items(items: list) -> list:
     fresh = only_new(items)
     enrich_images(fresh)
     return fresh
+
+
+def fill_images(item_ids: list) -> dict:
+    """Imagen bajo demanda para las tarjetas que se van a mostrar: og:image de
+    la página, una sola vez. Si no hay, se guarda NO_IMAGE para no volver a
+    pedirla. Devuelve {id: url} solo de las que sí trajeron imagen."""
+    pending = items_missing_image(item_ids[:16])
+    if not pending:
+        return {}
+
+    def resolve(item):
+        url = fetch_og_image(item.get("url"), timeout=3.5)
+        save_item_thumbnail(item["id"], url or NO_IMAGE)
+        return item["id"], url
+
+    return {i: u for i, u in run_parallel(resolve, pending, workers=16, timeout=6) if u}
 
 
 def sync_feeds(feeds: list, timeout: float = 12, force: bool = False) -> int:
@@ -355,6 +371,13 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 set_item_status(user_id, item_id, body.get("status", "inbox"))
                 self.send_json_response({"status": "success", "item_id": item_id})
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
+            return
+
+        if path == "/api/items/fill-images":
+            try:
+                self.send_json_response({"status": "success", "images": fill_images(body.get("ids", []))})
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return

@@ -76,7 +76,10 @@
   /* ---------- Top bar ---------- */
   .topbar{position:sticky;top:0;z-index:40;background:var(--bg);border-bottom:2px solid var(--border);padding-top:env(safe-area-inset-top)}
   .topbar-in{display:flex;align-items:center;justify-content:space-between;height:58px;gap:10px}
-  .brand{display:flex;align-items:center;gap:10px;min-width:0}
+  .brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1;overflow:hidden}
+  #view-title{overflow:hidden;text-overflow:ellipsis}
+  .pill-count{flex:none}
+  @media(max-width:400px){.topbar-title{font-size:22px;gap:6px}.brand{gap:8px}.pill-count{font-size:10.5px;padding:1px 4px}.topbar-actions .ico{width:36px}}
   .logo{flex:none;width:34px;height:34px;background:var(--text);color:var(--bg);font-family:var(--display);font-weight:700;font-size:19px;display:flex;align-items:center;justify-content:center;letter-spacing:-.04em;box-shadow:3px 3px 0 0 var(--accent)}
   .topbar-title{font-family:var(--display);font-size:27px;font-weight:700;text-transform:uppercase;letter-spacing:-.01em;line-height:1;display:flex;align-items:center;gap:9px;min-width:0;white-space:nowrap}
   .pill-count{font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.04em;color:var(--text);border:2px solid var(--border);padding:1px 6px;line-height:1.4}
@@ -452,7 +455,7 @@ async function loadItems(keepScroll){
     $('#c-reading').textContent=c.reading||0;
     const unread=(c.inbox||0);
     $('#unread-pill').textContent=unread;
-    $('#unread-pill').classList.toggle('hidden', currentTab==='sources'||!unread);
+    $('#unread-pill').classList.toggle('hidden', currentTab==='sources'||currentTab==='reading'||!unread);
     render();
     if(keepScroll) window.scrollTo(0,y);
     if(enrichRounds<3 && items.some(i=>!i.summary_tldr)) enrich();
@@ -500,7 +503,8 @@ function cardHTML(it,idx){
   const type=TYPE_LABEL[it.content_type]?it.content_type:'article';
   let tk=[]; try{ tk=it.key_takeaways? (typeof it.key_takeaways==='string'? JSON.parse(it.key_takeaways):it.key_takeaways):[] }catch(e){}
   const saved=it.status==='reading';
-  const thumb=it.thumbnail_url||(it.video_id?`https://i.ytimg.com/vi/${it.video_id}/hqdefault.jpg`:'');
+  const img=it.thumbnail_url==='none'?'':it.thumbnail_url;
+  const thumb=img||(it.video_id?`https://i.ytimg.com/vi/${it.video_id}/hqdefault.jpg`:'');
   const excerpt=clean(it.summary_tldr||it.raw_content||'');
   const src=sourceName(it), hue=sourceHue(it);
   const when=relTime(it.published_at);
@@ -548,6 +552,31 @@ document.addEventListener('error',e=>{
   img.remove();
 },true);
 
+// Imagen bajo demanda: solo las tarjetas que se van a ver y no la tienen.
+// El servidor la busca una vez y la guarda; el bloque de color se cambia por la foto.
+// render() corre varias veces por carga: cada id se pide una sola vez por sesión.
+const askedImages=new Set();
+async function fillImages(batch){
+  const ids=batch.filter(i=>i.content_type!=='video' && !i.thumbnail_url && !askedImages.has(i.id)).map(i=>i.id);
+  if(!ids.length) return;
+  ids.forEach(id=>askedImages.add(id));
+  let res;
+  try{ res=await api('/api/items/fill-images',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})}); }
+  catch(e){ return; }
+  for(const it of batch){
+    if(!ids.includes(it.id)) continue;
+    const url=(res.images||{})[it.id];
+    it.thumbnail_url=url||'none';
+    const ph=url && document.querySelector(`.card[data-id="${it.id}"] .media .ph`);
+    const live=items.find(x=>x.id===it.id); if(live) live.thumbnail_url=it.thumbnail_url;
+    if(!ph) continue;
+    const im=new Image(); im.alt=''; im.referrerPolicy='no-referrer';
+    im.dataset.ph=sourceHue(it); im.dataset.name=sourceName(it);
+    im.onload=()=>ph.replaceWith(im);
+    im.src=url;
+  }
+}
+
 // Ticker: los titulares del lote corren arriba, como el "now playing" de la radio.
 function renderTicker(batch){
   const t=$('#ticker'), run=$('#ticker-run');
@@ -573,6 +602,7 @@ function render(){
   const sources=new Set(batch.map(i=>sourceName(i))).size;
   const more=items.length-batch.length;
   renderTicker(batch);
+  fillImages(batch);
   feed.innerHTML = batch.map((it,i)=>cardHTML(it,i)).join('') + `
     <div class="batchend">
       <p>Revisaste ${batch.length} ${batch.length===1?'artículo':'artículos'} de ${sources} ${sources===1?'fuente':'fuentes'}${more?`.<br>Quedan ${more} en cola.`:'.'}</p>
