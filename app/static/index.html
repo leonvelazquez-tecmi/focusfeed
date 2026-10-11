@@ -107,6 +107,7 @@
   h2.title{margin:0;font-size:19.5px;line-height:1.28;font-weight:730;letter-spacing:-.011em}
   .excerpt{cursor:pointer;margin:6px 0 0;font-size:15.5px;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .thumb{width:92px;height:92px;border-radius:11px;object-fit:cover;background:var(--surface-2);flex:none}
+  .thumb.ph{display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:rgba(255,255,255,.92);background:hsl(var(--h) 52% 46%);letter-spacing:-.02em}
   .hero{display:block;position:relative;aspect-ratio:16/9;background:#000}
   .hero img{width:100%;height:100%;object-fit:cover;display:block}
   .hero .play{position:absolute;right:9px;bottom:9px;background:rgba(0,0,0,.78);color:#fff;font-size:12.5px;font-weight:700;border-radius:6px;padding:2px 7px}
@@ -211,6 +212,7 @@
       <option value="all">Todo tipo</option>
       <option value="video">Solo videos</option>
       <option value="article">Solo artículos</option>
+      <option value="podcast">Solo podcasts</option>
     </select>
   </div>
 </nav>
@@ -333,6 +335,17 @@ function clean(t){
     .replace(/<[^>]+>/g,' ').replace(/\s{2,}/g,' ').trim();
 }
 const GENERIC=new Set(['Autor','Canal de YouTube']);
+// Color estable por fuente para las tarjetas sin imagen.
+function sourceHue(it){
+  const f=feeds.find(f=>f.id===it.feed_id);
+  const key=(f&&f.title)||sourceName(it);
+  let h=0; for(const c of key) h=(h*31+c.codePointAt(0))>>>0;
+  return h%360;
+}
+function placeholderHTML(it){
+  const ini=(sourceName(it).trim()[0]||'·').toUpperCase();
+  return `<div class="thumb ph" style="--h:${sourceHue(it)}" aria-hidden="true">${esc(ini)}</div>`;
+}
 function sourceName(it){
   const f=feeds.find(f=>f.id===it.feed_id);
   if(it.author && !GENERIC.has(it.author)) return it.author;
@@ -455,7 +468,9 @@ function cardHTML(it){
       <span class="play">▶ ${esc(relTime(it.published_at))}</span>
     </a>`:'';
 
-  const sideThumb = (!isVideo && thumb)? `<img class="thumb" src="${esc(thumb)}" alt="" loading="lazy">`:'';
+  const sideThumb = isVideo ? '' : (thumb
+    ? `<img class="thumb" src="${esc(thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-ph="${sourceHue(it)}" data-ini="${esc((sourceName(it).trim()[0]||'·').toUpperCase())}">`
+    : placeholderHTML(it));
 
   return `
   <article class="card" data-id="${it.id}">
@@ -491,6 +506,16 @@ function cardHTML(it){
     </div>
   </article>`;
 }
+
+// Imagen rota (hotlink bloqueado, 404): se cambia por el respaldo de color.
+document.addEventListener('error',e=>{
+  const img=e.target;
+  if(!(img instanceof HTMLImageElement) || !img.classList.contains('thumb') || img.dataset.ph==null) return;
+  const d=document.createElement('div');
+  d.className='thumb ph'; d.style.setProperty('--h',img.dataset.ph); d.textContent=img.dataset.ini||'·';
+  d.setAttribute('aria-hidden','true');
+  img.replaceWith(d);
+},true);
 
 function render(){
   const feed=$('#feed');

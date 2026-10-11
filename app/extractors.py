@@ -80,3 +80,32 @@ def fetch_youtube_transcript_or_fallback(video_id: str, description: str = "") -
         pass
         
     return description
+
+
+_OG_RE = re.compile(
+    r'<meta[^>]+(?:property|name)=["\'](?:og:image(?::secure_url)?|twitter:image(?::src)?)["\'][^>]*>',
+    re.IGNORECASE)
+_CONTENT_RE = re.compile(r'content=["\']([^"\']+)["\']', re.IGNORECASE)
+
+
+def fetch_og_image(url: str, timeout: float = 4) -> str:
+    """og:image (o twitter:image) de una página, como URL absoluta. Lee solo
+    los primeros 96 KB: las meta viven en el <head>. Vacío si no hay o falla."""
+    if not url or not url.startswith("http"):
+        return ""
+    try:
+        from urllib.parse import urljoin
+        from app.ingestion import HEADERS
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if "html" not in (resp.headers.get("Content-Type") or "html"):
+                return ""
+            head = resp.read(96 * 1024).decode("utf-8", errors="ignore")
+            final_url = resp.geturl()
+        tag = _OG_RE.search(head)
+        if not tag:
+            return ""
+        m = _CONTENT_RE.search(tag.group(0))
+        return urljoin(final_url, m.group(1).replace("&amp;", "&").strip()) if m else ""
+    except Exception:
+        return ""
