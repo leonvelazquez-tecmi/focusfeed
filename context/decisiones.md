@@ -35,3 +35,13 @@ Disparador para mover a cuenta personal: el momento en que `customers/` tenga no
 El backend seguirá siendo `http.server` de Python dentro de una función de Vercel, validando el JWT de Supabase en cada request.
 
 Por qué: la migración es un proyecto en sí mismo y no acerca al primer peso cobrado. Se revisa si el producto crece.
+
+## 2026-10-11 · Rediseño editorial, aunque estaba fuera de alcance
+
+León pidió un diseño "más cool" tomando como referencia nts.live y freaksonly.fm. El rediseño visual estaba en "fuera de alcance" del ciclo; se hace igual por decisión explícita suya.
+
+Qué se tomó de cada uno, medido en el navegador:
+- **NTS:** Univers Condensed en mayúsculas para titulares, filetes de 1 a 2 px en vez de sombras suaves, etiquetas en caja, botón de play cuadrado sobre la imagen, imagen grande como protagonista.
+- **Freaks Only FM:** JetBrains Mono para todo lo funcional, #0a0a0a con un solo acento rojo (#dc2828), sombras duras desplazadas (4 a 8 px, sin difuminar), cero radios, ticker en marquesina de "now playing" y punto en vivo que pulsa.
+
+Aplicación: Archivo Narrow (sustituto libre de Univers Condensed) para titulares, JetBrains Mono para metadatos y botones, papel #f3f1ec en claro y negro #0a0a0a en oscuro, rojo señal como único acento. Imagen 16:10 a todo el ancho de cada tarjeta, rejilla de 1, 2 o 3 columnas (375, 760 y 1100 px). Movimiento: entrada escalonada de tarjetas, zoom de imagen y subrayado rojo al pasar, ticker con los titulares del lote. Todo se apaga con `prefers-reduced-motion`.
