@@ -32,7 +32,7 @@ DO $$
 DECLARE
     dueno UUID := '00000000-0000-0000-0000-000000000001';
 BEGIN
-    IF to_regclass('private.items_v1_backup') IS NOT NULL THEN
+    IF to_regclass('ff_respaldos.items_v1_backup') IS NOT NULL THEN
         RAISE EXCEPTION 'v4 sigue aplicado: corre supabase_rollback_v4.sql primero';
     END IF;
 
@@ -84,11 +84,13 @@ BEGIN
 
     -- Items que llegaron después de v2 y nunca tuvieron score del dueño:
     -- v1 les ponía 70 al ingerir. Sin esto quedarían en 0, hasta abajo.
+    -- (Incluye los que el dueño guardó antes de que tuvieran score.)
     UPDATE public.items i
        SET relevance_score = 70
      WHERE COALESCE(i.relevance_score, 0) = 0
        AND NOT EXISTS (SELECT 1 FROM public.user_items ui
-                        WHERE ui.item_id = i.id AND ui.user_id = dueno);
+                        WHERE ui.item_id = i.id AND ui.user_id = dueno
+                          AND ui.relevance_score IS NOT NULL);
 
     -- Después de v2 la categoría de cada fuente vive en subscriptions.
     UPDATE public.feeds f
@@ -121,4 +123,4 @@ COMMIT;
 
 -- Verificación:
 --   SELECT status, COUNT(*) FROM items GROUP BY 1;   -- debe parecerse al respaldo:
---   SELECT status, COUNT(*) FROM private.items_v1_backup GROUP BY 1;  (o public., según v4)
+--   SELECT status, COUNT(*) FROM public.items_v1_backup GROUP BY 1;

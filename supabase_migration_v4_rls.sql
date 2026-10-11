@@ -52,29 +52,11 @@ ALTER TABLE public.feeds ADD COLUMN IF NOT EXISTS last_modified TEXT;
 
 -- ----------------------------------------------------------
 -- 2. Respaldos fuera del alcance de la API
---    El esquema `private` no está expuesto por PostgREST.
+--    Esquema propio, no el genérico `private` (que Supabase recomienda para
+--    helpers y podría tener otras cosas). PostgREST solo expone `public`.
 -- ----------------------------------------------------------
--- Si `private` ya existe con objetos que no son estos respaldos, es de
--- alguien más (helpers de Supabase, otra migración): no se toca.
-DO $$
-BEGIN
-    IF to_regnamespace('private') IS NOT NULL AND (
-        EXISTS (SELECT 1 FROM pg_class
-                 WHERE relnamespace = to_regnamespace('private')
-                   AND relname NOT IN ('items_v1_backup', 'feeds_v1_backup', 'user_profile_v1_backup'))
-        OR EXISTS (SELECT 1 FROM pg_proc WHERE pronamespace = to_regnamespace('private'))
-        -- tipos y dominios propios (no el tipo fila de una tabla ni sus arreglos)
-        OR EXISTS (SELECT 1 FROM pg_type t
-                    WHERE t.typnamespace = to_regnamespace('private')
-                      AND t.typrelid = 0
-                      AND NOT EXISTS (SELECT 1 FROM pg_type e
-                                       WHERE e.oid = t.typelem AND e.typrelid <> 0))
-    ) THEN
-        RAISE EXCEPTION 'El esquema private ya tiene otros objetos: revisa a mano antes de seguir';
-    END IF;
-END $$;
-CREATE SCHEMA IF NOT EXISTS private;
-REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated;
+CREATE SCHEMA IF NOT EXISTS ff_respaldos;
+REVOKE ALL ON SCHEMA ff_respaldos FROM PUBLIC, anon, authenticated;
 
 DO $$
 DECLARE t TEXT;
@@ -82,13 +64,13 @@ BEGIN
     FOREACH t IN ARRAY ARRAY['items_v1_backup', 'feeds_v1_backup', 'user_profile_v1_backup']
     LOOP
         IF to_regclass('public.' || t) IS NOT NULL THEN
-            IF to_regclass('private.' || t) IS NOT NULL THEN
-                RAISE EXCEPTION 'Ya existe private.%: revisa a mano antes de seguir', t;
+            IF to_regclass('ff_respaldos.' || t) IS NOT NULL THEN
+                RAISE EXCEPTION 'Ya existe ff_respaldos.%: revisa a mano antes de seguir', t;
             END IF;
-            EXECUTE format('ALTER TABLE public.%I SET SCHEMA private', t);
+            EXECUTE format('ALTER TABLE public.%I SET SCHEMA ff_respaldos', t);
         END IF;
-        IF to_regclass('private.' || t) IS NOT NULL THEN
-            EXECUTE format('REVOKE ALL ON private.%I FROM PUBLIC, anon, authenticated', t);
+        IF to_regclass('ff_respaldos.' || t) IS NOT NULL THEN
+            EXECUTE format('REVOKE ALL ON ff_respaldos.%I FROM PUBLIC, anon, authenticated', t);
         END IF;
     END LOOP;
 END $$;
@@ -109,10 +91,13 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM anon,
 -- SECURITY DEFINER sería ejecutable con la llave anon.
 ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 
--- El backend sigue con todo.
+-- El backend sigue con todo, también sobre lo que se cree después.
 GRANT USAGE ON SCHEMA public TO service_role;
 GRANT ALL ON ALL TABLES    IN SCHEMA public TO service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES     TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES  TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO service_role;
 
 -- Las políticas de lectura abierta de v2 ya no tienen uso: sin GRANT no
 -- alcanzan a nadie. Se quitan para que nadie las reactive por accidente.

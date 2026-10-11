@@ -101,7 +101,6 @@ ROLES_SHIM="anon authenticated service_role supabase_admin ff_dueno"
 ROLES_PREVIOS=$(psql -X -t -A -d postgres -c "SELECT string_agg(rolname, ' ') FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role','supabase_admin','ff_dueno')")
 limpiar_todo() {
   dropdb --if-exists ff_rls_test >/dev/null 2>&1
-  dropdb --if-exists ff_rls_test_private >/dev/null 2>&1
   for r in $ROLES_SHIM; do
     [[ " $ROLES_PREVIOS " == *" $r "* ]] && continue
     psql -X -q -d postgres -c "DROP ROLE IF EXISTS $r" >/dev/null 2>&1 || true
@@ -141,25 +140,16 @@ for f in "get_user_feed(UUID, TEXT, TEXT, INTEGER)" "get_user_counts(UUID)" "get
 done
 check "respaldos fuera de public" "0" \
   "$(val "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name LIKE '%_v1_backup'")"
-check "respaldos en private" "3" \
-  "$(val "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='private' AND table_name LIKE '%_v1_backup'")"
-check "anon no ve el esquema private" "DENEGADO" \
-  "$(como anon '' 'SELECT COUNT(*) FROM private.user_profile_v1_backup;')"
+check "respaldos en ff_respaldos" "3" \
+  "$(val "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='ff_respaldos' AND table_name LIKE '%_v1_backup'")"
+check "anon no ve el esquema de respaldos" "DENEGADO" \
+  "$(como anon '' 'SELECT COUNT(*) FROM ff_respaldos.user_profile_v1_backup;')"
+check "authenticated no ve el esquema de respaldos" "DENEGADO" \
+  "$(como authenticated $OTRO 'SELECT COUNT(*) FROM ff_respaldos.user_profile_v1_backup;')"
 check "0 permisos de tabla para anon/authenticated" "0" \
   "$(val "SELECT COUNT(*) FROM information_schema.role_table_grants WHERE table_schema='public' AND grantee IN ('anon','authenticated')")"
 check "columnas etag y last_modified" "2" \
   "$(val "SELECT COUNT(*) FROM information_schema.columns WHERE table_name='feeds' AND column_name IN ('etag','last_modified')")"
-
-echo "v4 · el esquema private de alguien más no se toca"
-# Base aparte: v1 + v2 + un tipo propio en private, antes de v4.
-BD_PRINCIPAL=$BD; BD=ff_rls_test_private
-nueva_bd
-d -f "$RAIZ/supabase_schema_v2.sql" >/dev/null
-d -c "CREATE SCHEMA private; CREATE TYPE private.estado AS ENUM ('a', 'b');" >/dev/null
-contiene "v4 aborta si private tiene un tipo ajeno" "private ya tiene otros objetos" "$(correr < "$RAIZ/supabase_migration_v4_rls.sql")"
-check "y no movió los respaldos" "3" \
-  "$(val "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name LIKE '%_v1_backup'")"
-dropdb "$BD"; BD=$BD_PRINCIPAL
 
 echo "v4 · lo que se cree después tampoco nace abierto"
 d -c "CREATE FUNCTION public.rpc_futura() RETURNS BIGINT LANGUAGE sql SECURITY DEFINER AS 'SELECT COUNT(*) FROM public.user_items';
@@ -171,6 +161,9 @@ check "anon no ejecuta una RPC nueva con SECURITY DEFINER" "DENEGADO" \
 check "anon no lee una tabla nueva" "DENEGADO" "$(como anon '' 'SELECT COUNT(*) FROM public.tabla_futura;')"
 check "authenticated no lee una tabla nueva" "DENEGADO" \
   "$(como authenticated $OTRO 'SELECT COUNT(*) FROM public.tabla_futura;')"
+check "el backend sí ejecuta una RPC nueva" "f" \
+  "$(como service_role '' 'SELECT public.rpc_futura() IS NULL;')"
+check "el backend sí lee una tabla nueva" "0" "$(como service_role '' 'SELECT COUNT(*) FROM public.tabla_futura;')"
 d -c "DROP FUNCTION public.rpc_futura(); DROP TABLE public.tabla_futura;" >/dev/null
 
 echo "v4 · el backend (service_role) sigue funcionando"
@@ -241,6 +234,10 @@ q -c "UPDATE public.user_items SET status = 'reading' WHERE user_id = '$DUENO' A
        WHERE user_id = '$DUENO' AND item_id = $ITEM_PLACE;
       INSERT INTO public.user_items (user_id, item_id, relevance_score, curator_note)
        VALUES ('$REAL', $ITEM_PLACE, 91, 'Coincide con IA.');" >/dev/null
+ITEM_DISLIKE=$(val "SELECT item_id FROM public.user_items WHERE user_id = '$DUENO' AND item_id NOT IN ($ITEM_COMUN, $ITEM_NUEVO, $ITEM_AUTO, $ITEM_LIKE, $ITEM_VISTO, $ITEM_GUARDADO, $ITEM_PLACE) ORDER BY item_id LIMIT 1")
+q -c "UPDATE public.user_items SET status = 'reading', user_rating = 'love' WHERE user_id = '$DUENO' AND item_id = $ITEM_DISLIKE;
+      INSERT INTO public.user_items (user_id, item_id, status, user_rating, user_feedback_comment)
+       VALUES ('$REAL', $ITEM_DISLIKE, 'archived', 'dislike', 'clickbait');" >/dev/null
 
 contiene "si la cuenta nueva ya tiene temas, aborta" "ya tiene temas propios" "$(reasignar)"
 q -c "UPDATE public.user_profile SET focus_topics = '[]' WHERE user_id = '$REAL';" >/dev/null
@@ -259,8 +256,12 @@ check "visto nuevo no borra el like viejo" "archived|love" \
   "$(val "SELECT status || '|' || user_rating FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_VISTO")"
 check "un guardado viejo sobrevive a un visto nuevo" "reading" \
   "$(val "SELECT status FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_GUARDADO")"
-check "el 70 sin nota de v1 no pisa un score real nuevo" "91|Coincide con IA." \
-  "$(val "SELECT relevance_score || '|' || curator_note FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_PLACE")"
+check "el 70 sin nota de v1 y el score genérico nuevo se borran para recalcular" "null" \
+  "$(val "SELECT COALESCE(relevance_score::text, 'null') FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_PLACE")"
+check "ninguna fila conserva un score calculado con los temas por default" "0" \
+  "$(val "SELECT COUNT(*) FROM public.user_items WHERE user_id = '$REAL' AND curator_note IN ('nota IA', 'Coincide con IA.')")"
+check "un dislike nuevo gana con su estado sobre un guardado viejo" "archived|dislike|clickbait" \
+  "$(val "SELECT status || '|' || user_rating || '|' || user_feedback_comment FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_DISLIKE")"
 check "el tester que entró primero no recibe nada" "0|0" \
   "$(val "SELECT (SELECT COUNT(*) FROM public.user_items WHERE user_id = '$OTRO') || '|' || (SELECT COUNT(*) FROM public.user_profile WHERE user_id = '$OTRO' AND plan = 'pro')")"
 check "si las dos siguen la fuente, se queda tu categoría" "Mi IA" \
@@ -275,6 +276,13 @@ check "la otra cuenta intacta" "1" "$(val "SELECT COUNT(*) FROM public.subscript
 contiene "correrlo dos veces aborta" "ya se reasignó" "$(reasignar)"
 
 # ----------------------------------------------------------
+echo "rollback v4 con cuentas reales"
+contiene "se niega (abriría el corpus a cualquier cuenta)" "Ya hay cuentas en auth.users" \
+  "$(correr < "$RAIZ/supabase_rollback_v4.sql")"
+check "y el corpus sigue cerrado" "DENEGADO" "$(como authenticated $OTRO 'SELECT COUNT(*) FROM public.feeds;')"
+# Para probar las protecciones de rollback v2, simular que nadie ha entrado.
+q -c "DELETE FROM auth.users;" >/dev/null
+
 echo "rollback v2 · protecciones"
 d -f "$RAIZ/supabase_rollback_v4.sql" >/dev/null
 contiene "con otras cuentas en la base, aborta" "otras cuentas" \
@@ -300,22 +308,27 @@ check "respaldos de vuelta en public" "3" \
   "$(val "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name LIKE '%_v1_backup'")"
 check "authenticated vuelve a leer feeds" "2" \
   "$(como authenticated $OTRO 'SELECT COUNT(*) FROM public.feeds;')"
-check "rollback v4 borra private si quedó vacío" "" "$(val "SELECT to_regnamespace('private')")"
+check "rollback v4 borra su esquema de respaldos" "" "$(val "SELECT to_regnamespace('ff_respaldos')")"
 check "RLS de v2 sigue aislando user_items" "0" \
   "$(como authenticated $OTRO 'SELECT COUNT(*) FROM public.user_items;')"
-d -c "CREATE SCHEMA IF NOT EXISTS private; CREATE TABLE private.items_v1_backup (id INT);" >/dev/null
+d -c "CREATE SCHEMA ff_respaldos; CREATE TABLE ff_respaldos.items_v1_backup (id INT);" >/dev/null
 contiene "si el respaldo existe en los dos esquemas, aborta" "revisa a mano" \
   "$(correr < "$RAIZ/supabase_rollback_v4.sql")"
-d -c "DROP TABLE private.items_v1_backup; DROP SCHEMA private;" >/dev/null
+d -c "DROP SCHEMA ff_respaldos CASCADE;" >/dev/null
 
 echo "rollback v2 (de vuelta a v1)"
 # Un item que llegó después de v2 y nunca recibió score del dueño.
 q -c "INSERT INTO public.items (feed_id, guid, title, url, content_type, ai_processed)
-      VALUES (1, 'post-v2', 'Nuevo', 'https://ejemplo.com/nuevo', 'article', 1);" >/dev/null
+      VALUES (1, 'post-v2', 'Nuevo', 'https://ejemplo.com/nuevo', 'article', 1),
+             (1, 'post-v2-guardado', 'Nuevo guardado', 'https://ejemplo.com/nuevo2', 'article', 1);
+      INSERT INTO public.user_items (user_id, item_id, status)
+      SELECT '$DUENO', id, 'reading' FROM public.items WHERE guid = 'post-v2-guardado';" >/dev/null
 check "rollback v2 corre" "ok" "$(correr < "$RAIZ/supabase_rollback_v2.sql")"
 check "el item posterior a v2 vuelve con 70, no con 0" "70" \
   "$(val "SELECT relevance_score FROM public.items WHERE guid = 'post-v2'")"
-q -c "DELETE FROM public.items WHERE guid = 'post-v2';" >/dev/null
+check "el guardado sin score también vuelve con 70" "70|reading" \
+  "$(val "SELECT relevance_score || '|' || status FROM public.items WHERE guid = 'post-v2-guardado'")"
+q -c "DELETE FROM public.items WHERE guid IN ('post-v2', 'post-v2-guardado');" >/dev/null
 contiene "correrlo otra vez da un mensaje claro" "No hay tablas de v2" "$(correr < "$RAIZ/supabase_rollback_v2.sql")"
 check "estado personal de vuelta en items" "$ESTADOS_V1" "$(estados)"
 check "subscriptions borrada" "" "$(val "SELECT to_regclass('public.subscriptions')")"
@@ -335,7 +348,7 @@ check "y como es una sola transacción, no borró nada" "2" "$(val "SELECT COUNT
 check "con el comando del runbook, restaura" "ok" "$(restaurar "$TMP/pre.dump")"
 check "items con su columna status de v1" "$ESTADOS_V1" "$(estados)"
 check "sin restos de v2" "" "$(val "SELECT to_regclass('public.subscriptions')")"
-check "sin esquema private" "" "$(val "SELECT to_regnamespace('private')")"
+check "sin esquema de respaldos" "" "$(val "SELECT to_regnamespace('ff_respaldos')")"
 check "perfil de v1 de vuelta" "1" "$(val "SELECT COUNT(*) FROM user_profile WHERE id = 1")"
 check "permisos de v1 de vuelta (anon lee items)" "12" "$(como anon '' 'SELECT COUNT(*) FROM public.items;')"
 

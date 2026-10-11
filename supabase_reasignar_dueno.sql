@@ -22,7 +22,9 @@
 --       cambiaste el estado, gana ese estado, salvo que el viejo fuera
 --       guardado: un guardado nunca se pierde. Si diste un rating, gana ese
 --       rating con su comentario. Lo que no tocaste se queda como estaba.
---       El score de IA viejo gana si es real (hecho con tus temas).
+--       Un dislike nuevo gana con su estado (lo sacaste del feed).
+--       El score de IA viejo se queda si es real; los de la cuenta nueva
+--       se borran para que la app los recalcule con tus temas.
 --     · perfil: se queda el viejo (temas y preferencias aprendidas). Si en
 --       la cuenta nueva ya escribiste temas, el script aborta y te avisa,
 --       para que decidas tú. Lo que la cuenta nueva aprendió de tus likes
@@ -72,6 +74,14 @@ BEGIN
                     WHERE n.user_id = nuevo AND n.feed_id = v.feed_id);
     UPDATE public.subscriptions SET user_id = nuevo WHERE user_id = viejo;
 
+    -- Todo score de la cuenta nueva se calculó con los temas por default
+    -- (el perfil nuevo no tiene temas: se verificó arriba) y el perfil que
+    -- se queda es el viejo. Se borran para que la app los recalcule con tus
+    -- temas; score_pending_for_user solo puntúa filas sin score.
+    UPDATE public.user_items
+       SET relevance_score = NULL, curator_note = NULL, scored_at = NULL
+     WHERE user_id = nuevo;
+
     -- Items en las dos cuentas, campo por campo: la cuenta nueva crea filas
     -- sola (el score de IA al entrar) con valores por default. Un default no
     -- es una decisión tuya y no pisa lo viejo. Un like nuevo no borra un
@@ -80,7 +90,9 @@ BEGIN
     UPDATE public.user_items n
        -- Un guardado viejo sobrevive a un "visto" nuevo: en la cuenta nueva
        -- no sabías que ya lo tenías guardado.
-       SET status = CASE WHEN v.status = 'reading' THEN 'reading'
+       -- Un dislike nuevo es explícito ("sácalo") y trae su propio estado.
+       SET status = CASE WHEN n.user_rating = 'dislike' THEN n.status
+                         WHEN v.status = 'reading' THEN 'reading'
                          WHEN n.status = 'inbox' THEN v.status
                          ELSE n.status END,
            user_rating = CASE WHEN COALESCE(n.user_rating, 'none') = 'none'
@@ -90,16 +102,13 @@ BEGIN
                                         THEN v.user_feedback_comment ELSE n.user_feedback_comment END,
            feedback_at = CASE WHEN COALESCE(n.user_rating, 'none') = 'none'
                               THEN v.feedback_at ELSE n.feedback_at END,
-           -- El score nuevo se calculó con los temas por default de la cuenta
-           -- nueva; el viejo, con tus temas. Gana el viejo cuando es un score
-           -- real (siempre trae nota). El 70 sin nota que v1 ponía al ingerir
-           -- es un placeholder: ahí gana el nuevo.
+           -- Se queda el score viejo si es real (siempre trae nota). El 70 sin
+           -- nota que v1 ponía al ingerir es un placeholder: queda NULL para
+           -- que la app lo recalcule con tus temas.
            relevance_score = CASE WHEN COALESCE(v.curator_note, '') <> ''
-                                  THEN v.relevance_score
-                                  ELSE COALESCE(n.relevance_score, v.relevance_score) END,
+                                  THEN v.relevance_score END,
            curator_note = CASE WHEN COALESCE(v.curator_note, '') <> ''
-                               THEN v.curator_note
-                               ELSE COALESCE(n.curator_note, v.curator_note) END
+                               THEN v.curator_note END
       FROM public.user_items v
      WHERE n.user_id = nuevo AND v.user_id = viejo AND v.item_id = n.item_id;
     DELETE FROM public.user_items v

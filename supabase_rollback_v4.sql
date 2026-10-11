@@ -13,11 +13,24 @@
 --   · la identidad de user_profile.id (volver a DEFAULT 1 rompe la
 --     segunda cuenta que guarde perfil)
 --
--- OJO: si la llave anon ya está publicada en el frontend (PR B), correr
--- esto vuelve a exponer los respaldos y el corpus. Primero revierte el PR B.
+-- Solo vale antes de que alguien entre con Google: con cuentas reales,
+-- authenticated volvería a leer el corpus completo. El script lo verifica.
+-- Los respaldos vuelven a public pero con los permisos que v4 les quitó:
+-- siguen cerrados.
+-- También se queda la identidad de user_profile.id y los default
+-- privileges de service_role.
 -- ==========================================================
 
 BEGIN;
+
+-- Revertir v4 vuelve a abrir el corpus (todos los feeds y sus URLs) a
+-- cualquier cuenta con sesión. Con cuentas reales eso es una filtración.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM auth.users) THEN
+        RAISE EXCEPTION 'Ya hay cuentas en auth.users: revertir v4 dejaría a cualquiera listar todas las fuentes. No hay vuelta atrás automática; mándale el error a Claude';
+    END IF;
+END $$;
 
 -- Respaldos de vuelta a public
 DO $$
@@ -25,26 +38,17 @@ DECLARE t TEXT;
 BEGIN
     FOREACH t IN ARRAY ARRAY['items_v1_backup', 'feeds_v1_backup', 'user_profile_v1_backup']
     LOOP
-        IF to_regclass('private.' || t) IS NOT NULL THEN
+        IF to_regclass('ff_respaldos.' || t) IS NOT NULL THEN
             IF to_regclass('public.' || t) IS NOT NULL THEN
-                RAISE EXCEPTION 'Existen public.% y private.%: revisa a mano cuál conservar', t, t;
+                RAISE EXCEPTION 'Existen public.% y ff_respaldos.%: revisa a mano cuál conservar', t, t;
             END IF;
-            EXECUTE format('ALTER TABLE private.%I SET SCHEMA public', t);
+            EXECUTE format('ALTER TABLE ff_respaldos.%I SET SCHEMA public', t);
         END IF;
     END LOOP;
 END $$;
 
--- Si private quedó vacío, era solo de v4: fuera.
-DO $$
-BEGIN
-    IF to_regnamespace('private') IS NOT NULL THEN
-        BEGIN
-            DROP SCHEMA private;  -- sin CASCADE: falla si tiene algo
-        EXCEPTION WHEN dependent_objects_still_exist THEN
-            RAISE NOTICE 'private tiene otros objetos; se queda';
-        END;
-    END IF;
-END $$;
+-- El esquema es solo de v4. Sin CASCADE: si alguien le metió algo, falla.
+DROP SCHEMA IF EXISTS ff_respaldos;
 
 -- Permisos de v2
 ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO PUBLIC;

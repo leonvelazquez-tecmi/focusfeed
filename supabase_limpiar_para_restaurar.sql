@@ -23,9 +23,8 @@ BEGIN
     END IF;
 END $$;
 
-DROP TABLE IF EXISTS private.items_v1_backup, private.feeds_v1_backup, private.user_profile_v1_backup;
--- Sin CASCADE: si private tiene algo más, esto falla y no se borra nada.
-DROP SCHEMA IF EXISTS private;
+-- Esquema propio de v4: solo tiene los respaldos.
+DROP SCHEMA IF EXISTS ff_respaldos CASCADE;
 
 DROP FUNCTION IF EXISTS public.get_user_feed(UUID, TEXT, TEXT, INTEGER);
 DROP FUNCTION IF EXISTS public.get_user_counts(UUID);
