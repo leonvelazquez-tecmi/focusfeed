@@ -360,13 +360,6 @@ def batch_save_items(items: list):
     if not fresh:
         return 0
 
-    # Los Shorts no entran al corpus. Se revisa aquí, sobre lo nuevo, para que
-    # cada video se pregunte a YouTube una sola vez y cubra todas las rutas de sync.
-    from app.shorts import drop_shorts
-    fresh = drop_shorts(fresh)
-    if not fresh:
-        return 0
-
     if is_supabase():
         clean_batch = [{
             "feed_id": item.get("feed_id"),

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Archiva los Shorts de YouTube que ya están en el corpus.
 
-Desde feat/sin-shorts los Shorts nuevos no entran. Esto limpia los que ya
-estaban: revisa cada video contra /shorts/<id> (200 = Short) y lo marca como
+Desde fix/shorts-por-playlist los canales se leen por su playlist UULF (solo
+videos largos). Esto limpia lo que ya estaba: junta los Shorts de la playlist
+UUSH de cada canal (los 15 más recientes, confiable) y revisa el resto de los
+videos contra /shorts/<id> (200 = Short, solo funciona fuera de Vercel). Los marca como
 `archived` para cada usuario suscrito a su canal. No borra nada del corpus:
 el item sigue en `items` y se puede devolver al feed cambiando el status.
 Respeta lo que el usuario guardó: un Short en "Guardados" no se toca.
@@ -22,7 +24,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 warnings.simplefilter("ignore")
 
 from app.db import is_supabase, supabase_request, get_db_connection, init_db  # noqa: E402
+from app.ingestion import HEADERS, parse_youtube_feed_xml  # noqa: E402
 from app.shorts import find_shorts  # noqa: E402
+import re  # noqa: E402
+import urllib.request  # noqa: E402
+from concurrent.futures import ThreadPoolExecutor  # noqa: E402
 from app.storage import bulk_set_status  # noqa: E402
 
 
@@ -46,6 +52,32 @@ def videos():
         "SELECT id, feed_id, video_id, title FROM items WHERE content_type = 'video'").fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def shorts_por_playlist():
+    """video_ids de la playlist UUSH (Shorts) de cada canal suscrito."""
+    if is_supabase():
+        feeds = _paginado("feeds?select=feed_url&feed_type=eq.youtube")
+    else:
+        conn = get_db_connection()
+        feeds = [dict(r) for r in conn.execute("SELECT feed_url FROM feeds WHERE feed_type = 'youtube'")]
+        conn.close()
+    urls = []
+    for f in feeds:
+        m = re.search(r'channel_id=UC([A-Za-z0-9_-]{22})', f.get("feed_url") or "")
+        if m:
+            urls.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH{m.group(1)}")
+
+    def ids(url):
+        try:
+            req = urllib.request.Request(url, headers=HEADERS)
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                return [i["video_id"] for i in parse_youtube_feed_xml(resp.read().decode("utf-8", "ignore"), 0)]
+        except Exception:
+            return []
+
+    with ThreadPoolExecutor(16) as ex:
+        return {v for lote in ex.map(ids, urls) for v in lote}
 
 
 def suscriptores(feed_ids):
@@ -93,7 +125,9 @@ def main():
     vids = videos()
     print(f"{'Supabase' if is_supabase() else 'SQLite'}: {len(vids)} videos en el corpus. Revisando…")
 
-    shorts_ids = find_shorts([v["video_id"] for v in vids], workers=24, timeout=6)
+    por_playlist = shorts_por_playlist()
+    shorts_ids = por_playlist | find_shorts(
+        [v["video_id"] for v in vids if v["video_id"] not in por_playlist], workers=24, timeout=6)
     shorts = [v for v in vids if v["video_id"] in shorts_ids]
     print(f"Shorts: {len(shorts)} de {len(vids)} videos ({len(vids) - len(shorts)} normales)")
     for v in shorts[:5]:
