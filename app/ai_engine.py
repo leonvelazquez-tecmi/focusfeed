@@ -17,7 +17,15 @@ import json
 import os
 import re
 import unicodedata
+import time
+import urllib.error
 import urllib.request
+
+# JEV (TypeSafe vía OpenRouter): score personal de "Para ti". Sin llave, el
+# score sigue siendo el heurístico de score_for_user().
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+JEV_URL = "https://openrouter.ai/api/alpha/decisions"
+JEV_MODEL = "typesafe/jev-1.13"
 
 # Precio del modelo. Se configura por entorno para poder ajustarlo sin tocar
 # código. Mientras esté en 0 se siguen registrando los tokens, que es el dato
@@ -207,6 +215,66 @@ def score_for_user(item: dict, profile: dict) -> dict:
     return {"relevance_score": score, "curator_note": note}
 
 
+def _jev_question(profile: dict) -> dict:
+    topics = "; ".join(profile.get("focus_topics", []))
+    learned = profile.get("learned_preferences", {}) or {}
+    gusta = ", ".join(list(learned.get("boosted_authors", []))[:8])
+    evita = ", ".join(list((learned.get("penalized_tags") or {}))[:8])
+    extra = ""
+    if gusta:
+        extra += f" Suele calificar bien: {gusta}."
+    if evita:
+        extra += f" Suele descartar: {evita}."
+    return {"interesa": {
+        "type": "noul",
+        "instructions": "¿Este contenido vale el tiempo de este lector profesional?",
+        "criteria": {
+            "true": (f"Trata de sus temas ({topics}) con sustancia. "
+                     f"{profile.get('system_prompt_criteria', '')}{extra}"),
+            "false": ("Es entretenimiento, noticia efímera, clickbait, reseña de ocio o un tema "
+                      "ajeno a sus intereses, aunque venga de una fuente que sigue."),
+        },
+    }}
+
+
+def score_with_jev(item: dict, profile: dict, user_id=None):
+    """Score personal 0 a 100 con JEV, o None si no hay llave o falla.
+
+    Una llamada por item (~USD 0.00003). Cada llamada se registra en ai_usage.
+    Requests con ZDR y data_collection=deny.
+    """
+    if not OPENROUTER_API_KEY:
+        return None
+    body = {
+        "model": JEV_MODEL,
+        "state": {"titulo": item.get("title", ""), "fuente": item.get("author", ""),
+                  "tipo": item.get("content_type", ""),
+                  "extracto": (item.get("summary_tldr") or item.get("raw_content") or "")[:800]},
+        "questions": _jev_question(profile),
+        "provider": {"zdr": True, "data_collection": "deny"},
+    }
+    req = urllib.request.Request(JEV_URL, data=json.dumps(body).encode("utf-8"), method="POST", headers={
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"})
+    for intento in range(2):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                d = json.load(r)
+            p = float(d["answers"]["interesa"]["noul"])
+            cost = float(d.get("usage", {}).get("cost", 0.0) or 0.0)
+            try:
+                from app.storage import log_ai_usage
+                log_ai_usage(user_id, item.get("id"), JEV_MODEL, cost_usd=cost, kind="jev_score")
+            except Exception:
+                pass
+            return max(1, min(99, round(p * 100)))
+        except (urllib.error.URLError, KeyError, ValueError, TypeError) as e:
+            if intento == 1:
+                print(f"score_with_jev: falló, se usa el heurístico: {e}")
+            else:
+                time.sleep(1)
+    return None
+
+
 # ==========================================================
 # Orquestación
 # ==========================================================
@@ -240,6 +308,9 @@ def score_pending_for_user(user_id: str, limit: int = 40):
         if item.get("relevance_score") is not None:
             continue
         result = score_for_user(item, profile)
+        jev_score = score_with_jev(item, profile, user_id)
+        if jev_score is not None:
+            result["relevance_score"] = jev_score
         save_user_score(user_id, item["id"], result["relevance_score"], result["curator_note"])
         scored += 1
     return scored
