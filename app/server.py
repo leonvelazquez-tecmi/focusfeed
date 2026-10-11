@@ -23,11 +23,12 @@ from app.ingestion import (
     parse_opml, resolve_feed_url, HEADERS
 )
 from app.ai_engine import (
-    process_item_ai, record_feedback, score_pending_for_user,
+    process_item_ai, record_feedback, score_pending_for_user, ai_health, ai_canary,
     RATING_TO_STATUS
 )
 
 PORT = int(os.environ.get("PORT", 8080))
+_CANARIO = {"t": 0.0, "res": {}}
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 socketserver.TCPServer.allow_reuse_address = True
@@ -167,6 +168,17 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(f.read())
             return
 
+        if path == "/api/health/ai":
+            # Canario público de la IA. Cacheado 10 min para que nadie pueda
+            # usarlo para gastar tokens. 503 si Gemini o JEV fallan.
+            ahora = time.time()
+            if ahora - _CANARIO["t"] > 600:
+                _CANARIO["res"], _CANARIO["t"] = ai_canary(), ahora
+            res = _CANARIO["res"]
+            ok = all(v == "sin_llave" or v.startswith("ok") for v in res.values())
+            self.send_json_response({"ok": ok, **res, **ai_health()}, 200 if ok else 503)
+            return
+
         if path == "/api/status":
             self.send_json_response({
                 "status": "online",
@@ -174,7 +186,8 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 "user_id": self.current_user(),
                 "supabase_url_configured": bool(os.environ.get("SUPABASE_URL")),
                 "supabase_key_configured": bool(os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")),
-                "ai_configured": bool(os.environ.get("GEMINI_API_KEY"))
+                "ai_configured": bool(os.environ.get("GEMINI_API_KEY")),
+                **ai_health()
             })
             return
 
@@ -206,8 +219,9 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                     feeds_synced += len(batch_slice)
                     offset += batch_size
 
+                canario = ai_canary()
                 self.send_json_response({
-                    "status": "success", "feeds_synced": feeds_synced,
+                    "status": "success", "feeds_synced": feeds_synced, "canario_ia": canario,
                     "total_feeds": total_feeds, "new_items": total_new_items,
                     "completed": offset >= total_feeds,
                     "elapsed_seconds": round(time.time() - started, 1)
