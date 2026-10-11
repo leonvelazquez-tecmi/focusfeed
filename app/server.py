@@ -24,6 +24,7 @@ from app.ingestion import (
     parse_opml, resolve_feed_url, HEADERS
 )
 from app.extractors import fetch_og_image
+from app.shorts import drop_shorts
 from app.ai_engine import (
     process_item_ai, record_feedback, score_pending_for_user, ai_health, ai_canary,
     RATING_TO_STATUS
@@ -53,6 +54,30 @@ def fetch_feed_and_parse(feed_dict: dict) -> list:
     if feed_dict.get("last_modified"):
         headers["If-Modified-Since"] = feed_dict["last_modified"]
 
+    long_url = youtube_long_form_url(feed_url) if feed_type == "youtube" else None
+    if long_url:
+        # Solo videos largos: la playlist UULF del canal no trae Shorts.
+        items = _fetch_and_parse(feed_dict, long_url, headers, feed_type, feed_id)
+        if items is not None:
+            return items
+        # UULF no existe para este canal: feed completo, filtrando Shorts uno por uno.
+        return drop_shorts(_fetch_and_parse(feed_dict, feed_url, headers, feed_type, feed_id) or [])
+    return _fetch_and_parse(feed_dict, feed_url, headers, feed_type, feed_id) or []
+
+
+def youtube_long_form_url(feed_url: str):
+    """Feed de la playlist UULF (solo videos largos) de un canal de YouTube, o
+    None si la URL no es de canal. UC<id> es el canal, UULF<id> sus videos
+    largos y UUSH<id> sus Shorts: verificado contra /shorts/<id>."""
+    m = re.search(r'channel_id=UC([A-Za-z0-9_-]{22})', feed_url or "")
+    if not m:
+        return None
+    return f"https://www.youtube.com/feeds/videos.xml?playlist_id=UULF{m.group(1)}"
+
+
+def _fetch_and_parse(feed_dict: dict, feed_url: str, headers: dict, feed_type: str, feed_id):
+    """Descarga y parsea. None solo cuando la URL da 404 (para el respaldo de
+    UULF); [] en cualquier otra falla o en 304."""
     try:
         req = urllib.request.Request(feed_url, headers=headers)
         with urllib.request.urlopen(req, timeout=6) as resp:
@@ -61,6 +86,8 @@ def fetch_feed_and_parse(feed_dict: dict) -> list:
             feed_dict["_last_modified"] = resp.headers.get("Last-Modified") or ""
             xml_content = resp.read().decode('utf-8', errors='ignore')
     except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
         if e.code == 304:
             feed_dict["_fetched"] = True
             feed_dict["_etag"], feed_dict["_last_modified"] = feed_dict.get("etag"), feed_dict.get("last_modified")
