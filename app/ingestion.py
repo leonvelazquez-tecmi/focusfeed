@@ -88,59 +88,64 @@ def resolve_feed_url(raw_url: str) -> tuple[str, str, str]:
 
     return raw_url, feed_type, suggested_title
 
+def _first(el, *paths):
+    """Primer subelemento que exista. Compara contra None a propósito: un
+    Element sin hijos es falsy, y `find(a) or find(b)` lo descartaba, que es
+    por lo que todo YouTube y Atom salía "Sin título" y con fecha de hoy."""
+    for path in paths:
+        found = el.find(path, NAMESPACES)
+        if found is not None:
+            return found
+    return None
+
+
+def _text(el, *paths) -> str:
+    found = _first(el, *paths)
+    if found is None or not found.text:
+        return ""
+    return found.text.strip()
+
+
+def _fallback_title(text: str) -> str:
+    """Primera línea con contenido, sin markdown, como título de último recurso."""
+    for line in (text or "").splitlines():
+        line = re.sub(r'[#*_>`\[\]]', '', line).strip()
+        if line:
+            return line[:120]
+    return "Sin título"
+
+
 def parse_youtube_feed_xml(xml_text: str, feed_id: int):
     items = []
     try:
         root = ET.fromstring(xml_text)
     except Exception:
-        # If not valid XML, abort gracefully
         return []
 
-    entries = root.findall('atom:entry', NAMESPACES) or root.findall('{http://www.w3.org/2005/Atom}entry') or root.findall('.//entry')
-
-    for entry in entries:
+    for entry in root.findall('atom:entry', NAMESPACES):
         try:
-            yt_video_id_el = entry.find('yt:videoId', NAMESPACES)
-            if yt_video_id_el is not None and yt_video_id_el.text:
-                video_id = yt_video_id_el.text.strip()
-            else:
-                id_el = entry.find('atom:id', NAMESPACES) or entry.find('id')
-                if id_el is not None and id_el.text:
-                    video_id = id_el.text.replace('yt:video:', '').strip()
-                else:
-                    continue
+            video_id = _text(entry, 'yt:videoId') or _text(entry, 'atom:id').replace('yt:video:', '')
+            if not video_id:
+                continue
 
-            title_el = entry.find('atom:title', NAMESPACES) or entry.find('title')
-            title = title_el.text.strip() if (title_el is not None and title_el.text) else "Sin título"
+            desc = _text(entry, 'media:group/media:description')
+            title = (_text(entry, 'atom:title') or _text(entry, 'media:group/media:title')
+                     or _fallback_title(desc))
 
-            link_el = entry.find('atom:link[@rel="alternate"]', NAMESPACES) or entry.find('link')
-            url = link_el.get('href') if link_el is not None else f"https://www.youtube.com/watch?v={video_id}"
+            link_el = _first(entry, 'atom:link[@rel="alternate"]', 'atom:link')
+            url = (link_el.get('href') if link_el is not None else "") or f"https://www.youtube.com/watch?v={video_id}"
 
-            author_el = entry.find('.//atom:author/atom:name', NAMESPACES) or entry.find('.//author/name')
-            author = author_el.text.strip() if (author_el is not None and author_el.text) else "Canal de YouTube"
-
-            pub_el = entry.find('atom:published', NAMESPACES) or entry.find('published')
-            published_at = pub_el.text.strip() if (pub_el is not None and pub_el.text) else datetime.utcnow().isoformat()
-
-            desc = ""
-            thumb_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
-            
-            media_group = entry.find('media:group', NAMESPACES)
-            if media_group is not None:
-                desc_el = media_group.find('media:description', NAMESPACES)
-                if desc_el is not None and desc_el.text:
-                    desc = desc_el.text.strip()
-                thumb_el = media_group.find('media:thumbnail', NAMESPACES)
-                if thumb_el is not None and thumb_el.get('url'):
-                    thumb_url = thumb_el.get('url')
+            thumb_el = _first(entry, 'media:group/media:thumbnail')
+            thumb_url = (thumb_el.get('url') if thumb_el is not None else "") or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
             items.append({
                 "feed_id": feed_id,
                 "guid": f"yt:{video_id}",
                 "title": title,
                 "url": url,
-                "author": author,
-                "published_at": published_at,
+                "author": _text(entry, 'atom:author/atom:name') or "Canal de YouTube",
+                "published_at": (_text(entry, 'atom:published') or _text(entry, 'atom:updated')
+                                 or datetime.utcnow().isoformat()),
                 "content_type": "video",
                 "video_id": video_id,
                 "thumbnail_url": thumb_url,
@@ -149,7 +154,7 @@ def parse_youtube_feed_xml(xml_text: str, feed_id: int):
             })
         except Exception:
             continue
-            
+
     return items
 
 def parse_rss_feed_xml(xml_text: str, feed_id: int):
@@ -158,37 +163,25 @@ def parse_rss_feed_xml(xml_text: str, feed_id: int):
         root = ET.fromstring(xml_text)
     except Exception:
         return []
-    
+
     if root.tag.endswith('feed'):
-        entries = root.findall('atom:entry', NAMESPACES) or root.findall('.//entry')
-        for entry in entries:
+        for entry in root.findall('atom:entry', NAMESPACES):
             try:
-                title_el = entry.find('atom:title', NAMESPACES) or entry.find('title')
-                title = title_el.text.strip() if (title_el is not None and title_el.text) else "Sin título"
-                
-                link_el = entry.find('atom:link[@rel="alternate"]', NAMESPACES) or entry.find('link')
-                url = link_el.get('href') if link_el is not None else ""
-                
-                guid_el = entry.find('atom:id', NAMESPACES) or entry.find('id')
-                guid = guid_el.text.strip() if (guid_el is not None and guid_el.text) else url
-                
-                pub_el = entry.find('atom:published', NAMESPACES) or entry.find('atom:updated', NAMESPACES) or entry.find('published')
-                published_at = pub_el.text.strip() if (pub_el is not None and pub_el.text) else datetime.utcnow().isoformat()
-                
-                author_el = entry.find('.//atom:author/atom:name', NAMESPACES) or entry.find('.//name')
-                author = author_el.text.strip() if (author_el is not None and author_el.text) else "Autor"
-                
-                content_el = entry.find('atom:content', NAMESPACES) or entry.find('atom:summary', NAMESPACES) or entry.find('content')
+                link_el = _first(entry, 'atom:link[@rel="alternate"]', 'atom:link')
+                url = link_el.get('href', '') if link_el is not None else ""
+
+                content_el = _first(entry, 'atom:content', 'atom:summary')
                 raw_html = content_el.text if (content_el is not None and content_el.text) else ""
                 cleaned = clean_html_article(raw_html)
-                
+
                 items.append({
                     "feed_id": feed_id,
-                    "guid": guid,
-                    "title": title,
+                    "guid": _text(entry, 'atom:id') or url,
+                    "title": _text(entry, 'atom:title') or _fallback_title(cleaned["text"]),
                     "url": url,
-                    "author": author,
-                    "published_at": published_at,
+                    "author": _text(entry, 'atom:author/atom:name') or "Autor",
+                    "published_at": (_text(entry, 'atom:published') or _text(entry, 'atom:updated')
+                                     or datetime.utcnow().isoformat()),
                     "content_type": "article",
                     "video_id": None,
                     "thumbnail_url": "",
@@ -198,40 +191,22 @@ def parse_rss_feed_xml(xml_text: str, feed_id: int):
             except Exception:
                 continue
     else:
-        channel = root.find('channel') or root
-        rss_items = channel.findall('item')
-        for item_el in rss_items:
+        channel = root.find('channel')
+        if channel is None:
+            channel = root
+        for item_el in channel.findall('item'):
             try:
-                title_el = item_el.find('title')
-                title = title_el.text.strip() if (title_el is not None and title_el.text) else "Sin título"
-                
-                link_el = item_el.find('link')
-                url = link_el.text.strip() if (link_el is not None and link_el.text) else ""
-                
-                guid_el = item_el.find('guid')
-                guid = guid_el.text.strip() if (guid_el is not None and guid_el.text) else url
-                
-                pub_el = item_el.find('pubDate')
-                published_at = pub_el.text.strip() if (pub_el is not None and pub_el.text) else datetime.utcnow().isoformat()
-                
-                author_el = item_el.find('dc:creator', NAMESPACES) or item_el.find('author')
-                author = author_el.text.strip() if (author_el is not None and author_el.text) else "Autor"
-                
-                content_encoded = item_el.find('content:encoded', NAMESPACES)
-                raw_html = content_encoded.text if (content_encoded is not None and content_encoded.text) else ""
-                if not raw_html:
-                    desc_el = item_el.find('description')
-                    raw_html = desc_el.text if (desc_el is not None and desc_el.text) else ""
-                
+                url = _text(item_el, 'link')
+                raw_html = _text(item_el, 'content:encoded') or _text(item_el, 'description')
                 cleaned = clean_html_article(raw_html)
-                
+
                 items.append({
                     "feed_id": feed_id,
-                    "guid": guid,
-                    "title": title,
+                    "guid": _text(item_el, 'guid') or url,
+                    "title": _text(item_el, 'title') or _fallback_title(cleaned["text"]),
                     "url": url,
-                    "author": author,
-                    "published_at": published_at,
+                    "author": _text(item_el, 'dc:creator', 'author') or "Autor",
+                    "published_at": _text(item_el, 'pubDate') or datetime.utcnow().isoformat(),
                     "content_type": "article",
                     "video_id": None,
                     "thumbnail_url": "",
@@ -240,7 +215,7 @@ def parse_rss_feed_xml(xml_text: str, feed_id: int):
                 })
             except Exception:
                 continue
-                
+
     return items
 
 def parse_opml(opml_content: str):

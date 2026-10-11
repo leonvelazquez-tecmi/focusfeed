@@ -1,6 +1,6 @@
 # Roadmap
 
-Actualizado: 18-ago-2026 (segunda pasada)
+Actualizado: 8-oct-2026
 
 ## Objetivo de este ciclo
 
@@ -18,7 +18,24 @@ La línea de llegada del ciclo: dos cuentas distintas, cada una con sus fuentes 
 
 **Pendiente humano antes de que esto llegue a producción:** correr `supabase_schema_v2.sql` en el SQL editor de Supabase, sustituyendo el uuid del bloque de migración por el de la cuenta real.
 
+**T7. Títulos reales.** Hecho y verificado el 8-oct.
+- Causa: `find(a) or find(b)` en `app/ingestion.py`. Un `Element` de ElementTree sin hijos es falsy, así que el `or` descartaba el título, el link, el autor y la fecha de todo YouTube y todo Atom. Por eso salían "Sin título" con fecha "ahora".
+- Arreglo: helpers `_first` y `_text` que comparan contra `None`, más respaldo de título con `media:title` o la primera línea del contenido. `tests/test_ingestion.py` con fixtures: 14/14 en verde (el código viejo falla 10).
+- `routines/repair_titles.py` repara lo ya guardado: YouTube por oEmbed (sin llave), otros feeds re-descargando por `guid`. Probado local 40/40. La fecha de esos items viejos se queda como la de ingesta: oEmbed no la trae.
+
+**T8. Sincronización rápida.** Hecho y verificado el 8-oct.
+- El resumen de IA salió de la descarga: antes cada feed analizaba sus 4 items más nuevos aunque ya existieran. Ahora solo `/api/items/process-pending` analiza, y solo lo nuevo.
+- `run_parallel` en `app/server.py`: un feed lento ya no tumba la tanda con un 500.
+- Tandas de 40 feeds, 16 descargas en paralelo, 3 tandas a la vez desde el cliente. Feeds sincronizados hace menos de 15 min se saltan (YouTube no manda ETag, publica con `max-age=900`); los que sí mandan ETag o Last-Modified se piden condicionales.
+- La app sincroniza sola al abrir si pasaron más de 30 min, sin bloquear el feed.
+- Medido local: antes 172 fuentes en 8 s; ahora 1,344 fuentes en 11 s y la repetición en 3 s.
+
 ## En curso
+
+**T9. "Para ti" con JEV.** Spike hecho el 8-oct (`routines/jev_scoring_spike.py`), falta conectarlo.
+- 150 items recientes: USD 0.024 por cada 1,000 items, latencia mediana 0.4 s. La heurística actual le da 52 a casi todo; JEV pone arriba IA, agentes y PKM, y hasta abajo late-night shows y nota roja.
+- Falta: medir contra likes y dislikes reales de producción, y conectar `score_with_jev` en `app/ai_engine.py` (cambia el prompt de IA y el costo por usuario: pregunta primero).
+
 
 **T2. Autenticación.**
 Supabase Auth con Google OAuth. Reusar el patrón de kanban-publico.
@@ -58,7 +75,8 @@ Escrito a propósito, para que no se construya de más:
 - **La IA sigue sin correr en producción.** La causa original (las credenciales se perdían en `fetch_profile`) ya está arreglada: ahora la llave se lee de `GEMINI_API_KEY` del entorno. Falta ponerla en Vercel y decidir el modelo definitivo. Sin esa variable, el motor de respaldo entrega resumen sin modelo y score determinista.
 - **RLS apagado y `GRANT ALL` a `anon`** en el esquema v1 que sigue vivo en producción. `supabase_schema_v2.sql` ya lo corrige, pero nadie lo ha corrido todavía.
 - **`OWNER FALLBACK` en `app/auth.py`.** Cualquier request sin token válido se atiende como si fuera el dueño. Es intencional para que la app siga funcionando durante T2, y es lo primero que hay que borrar cuando el acceso esté puesto.
-- **El cron no escala.** Uno solo recorre todos los feeds en tandas de 15 con presupuesto de 50 segundos. Con varios usuarios no termina.
+- **El cron no escala.** Ya va en tandas de 40 y salta lo fresco, pero sigue siendo una sola función con presupuesto de 45 segundos.
+- **Migración pendiente:** `supabase_migration_v3_feed_cache.sql` (columnas `etag` y `last_modified` en `feeds`). Sin ella la sync funciona, pero sin caché condicional en producción.
 - **El repo vive en cuenta institucional.** Mover a cuenta personal antes de que `customers/` tenga nombres y correos reales. Ese es el disparador, no una fecha.
 - **Sin confirmar: el guardado que se perdió el 18-ago.** El diagnóstico mostró la fila del dislike con `status='inbox'` (bug ya corregido), pero ninguna fila con `status='reading'` entre las 20 más recientes. Como todas las filas de la migración comparten `created_at`, el orden entre ellas es arbitrario y la consulta pudo dejarla fuera. La hipótesis principal es que la escritura falló en silencio, que es justo lo que el manejo de errores nuevo ahora hace visible. Si vuelve a pasar, ahora sale un toast con el error real.
 - **`set_item_status` y `feedback` no validan suscripción.** Un usuario puede crear una fila en `user_items` para un item de un feed al que no está suscrito. No filtra datos de nadie (la lectura del feed sí valida la suscripción) y no devuelve contenido ajeno, pero ensucia la tabla. Should fix, no bloquea.

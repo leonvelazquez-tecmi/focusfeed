@@ -98,6 +98,8 @@ def init_db():
         icon_url TEXT,
         is_active INTEGER DEFAULT 1,
         last_synced_at TEXT,
+        etag TEXT,
+        last_modified TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -175,5 +177,10 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_uitems_user_status ON user_items(user_id, status);
     CREATE INDEX IF NOT EXISTS idx_usage_user_date ON ai_usage(user_id, created_at);
     """)
+    # Bases locales creadas antes de la sincronización condicional.
+    cols = {r[1] for r in cursor.execute("PRAGMA table_info(feeds)").fetchall()}
+    for col in ("etag", "last_modified"):
+        if col not in cols:
+            cursor.execute(f"ALTER TABLE feeds ADD COLUMN {col} TEXT")
     conn.commit()
     conn.close()

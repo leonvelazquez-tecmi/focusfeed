@@ -650,24 +650,40 @@ async function submitFeedback(){
   }catch(e){ toast('No se pudo guardar la calificación: '+e.message); return; }
   closeModal('modal-feedback'); toast('Curador calibrado'); loadItems(true); loadProfile();
 }
+const SYNC_BATCH=40, SYNC_PARALLEL=3, AUTO_SYNC_MIN=30;
 async function syncAll(){
   if(syncing) return; syncing=true;
   const b=$('#sync-banner'); b.classList.remove('hidden');
   $('#sync-ico').style.opacity=.4;
-  let offset=0, total=feeds.length||1, added=0;
-  try{
-    while(true){
-      $('#sync-text').textContent=`Sincronizando ${offset+1}–${Math.min(offset+15,total)}…`;
-      $('#sync-count').textContent=`${offset}/${total}`;
-      const d=await api('/api/feeds/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({offset,limit:15})});
-      added+=d.new_items||0; total=d.total_feeds||total;
-      if(!d.has_more||d.batch_size===0) break;
-      offset+=15;
+  const total=feeds.length||1;
+  const offsets=[]; for(let o=0;o<total;o+=SYNC_BATCH) offsets.push(o);
+  let done=0, added=0, failed=0;
+  const paint=()=>{
+    $('#sync-text').textContent=added?`Sincronizando · ${added} nuevos…`:'Sincronizando fuentes…';
+    $('#sync-count').textContent=`${Math.min(done,total)}/${total}`;
+  };
+  paint();
+  async function worker(){
+    while(offsets.length){
+      const offset=offsets.shift();
+      try{
+        const d=await api('/api/feeds/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({offset,limit:SYNC_BATCH})});
+        added+=d.new_items||0;
+        if(d.new_items) loadItems(true);
+      }catch(e){ failed++; }
+      done+=SYNC_BATCH; paint();
     }
-    toast(`Sincronizado · ${added} nuevos`);
-    await loadFeeds(); await loadItems();
-  }catch(e){ toast('Error al sincronizar'); }
-  finally{ syncing=false; b.classList.add('hidden'); $('#sync-ico').style.opacity=1; }
+  }
+  try{
+    await Promise.all(Array.from({length:SYNC_PARALLEL},worker));
+    try{ localStorage.setItem('ff-last-sync',String(Date.now())); }catch(e){}
+    toast(failed?`Sincronizado con ${failed} tandas fallidas · ${added} nuevos`:`Sincronizado · ${added} nuevos`);
+    await loadFeeds(); await loadItems(true);
+  }finally{ syncing=false; b.classList.add('hidden'); $('#sync-ico').style.opacity=1; }
+}
+function autoSyncIfStale(){
+  let last=0; try{ last=+localStorage.getItem('ff-last-sync')||0; }catch(e){}
+  if(feeds.length && Date.now()-last>AUTO_SYNC_MIN*60000) syncAll();
 }
 
 /* ---------------- swipe ---------------- */
@@ -761,7 +777,7 @@ if(DEV_USER){
 
 applyTheme(currentTheme());
 
-(async function init(){ await loadFeeds(); await loadItems(); loadProfile(); })();
+(async function init(){ await loadFeeds(); await loadItems(); loadProfile(); autoSyncIfStale(); })();
 </script>
 </body>
 </html>

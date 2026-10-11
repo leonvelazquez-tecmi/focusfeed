@@ -404,6 +404,25 @@ def fetch_all_active_feeds():
     return feeds
 
 
+def save_feed_cache(feed_id, etag: str, last_modified: str):
+    """Guarda ETag y Last-Modified para que la siguiente sincronización pida
+    solo lo que cambió (un 304 no se descarga ni se parsea). Si la columna aún
+    no existe en Supabase, falla en silencio: la sync sigue funcionando sin caché."""
+    if not feed_id:
+        return
+    data = {"etag": etag or None, "last_modified": last_modified or None,
+            "last_synced_at": _now()}
+    if is_supabase():
+        supabase_request(f"feeds?id=eq.{int(feed_id)}", method="PATCH", data=data,
+                         headers_extra={"Prefer": "return=minimal"})
+        return
+    conn = get_db_connection()
+    conn.execute("UPDATE feeds SET etag=?, last_modified=?, last_synced_at=? WHERE id=?",
+                 (data["etag"], data["last_modified"], data["last_synced_at"], int(feed_id)))
+    conn.commit()
+    conn.close()
+
+
 def batch_create_feeds(feeds_list: list):
     """Crea o actualiza feeds en el corpus global. Devuelve los registros con
     su id real, porque el id se necesita para enlazar items y suscripciones."""
