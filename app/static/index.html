@@ -146,7 +146,8 @@
 
   .card-body{padding:14px 15px 12px}
   .meta{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:8px;min-width:0}
-  .meta .src{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .meta .src{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:0 1 auto;max-width:62%}
+  .meta .by{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto;font-weight:400}
   .meta .when{flex:none;margin-left:auto}
   h2.title{margin:0;font-family:var(--display);font-size:25px;line-height:1.04;font-weight:700;letter-spacing:-.005em;text-transform:uppercase;overflow-wrap:anywhere}
   h2.title a{background-image:linear-gradient(var(--accent),var(--accent));background-size:0 3px;background-repeat:no-repeat;background-position:0 100%;transition:background-size .3s ease}
@@ -392,6 +393,24 @@ function sourceHue(it){
 function placeholderHTML(hue,name){
   return `<div class="ph" style="--h:${hue}" aria-hidden="true"><b>${esc(name)}</b></div>`;
 }
+// Publicación (el feed al que estás suscrito) y autor, por separado.
+function pubName(it){
+  const f=feeds.find(f=>f.id===it.feed_id);
+  const t=(f&&f.title||'').trim();
+  // Fuentes dadas de alta con la URL como título: se muestra el dominio.
+  if(/^https?:\/\//.test(t)){ try{ return new URL(t).hostname.replace(/^www\./,''); }catch(e){} }
+  return t||sourceName(it);
+}
+function byline(it){
+  let a=(it.author||'').trim();
+  // RSS de podcasts: "correo@dominio (Nombre)" se queda en el nombre.
+  const m=a.match(/@\S*\s*\(([^)]+)\)\s*$/); if(m) a=m[1].trim();
+  if(/^\S+@\S+$/.test(a)) a='';
+  if(!a || GENERIC.has(a)) return '';
+  const p=pubName(it).toLowerCase(), al=a.toLowerCase();
+  // En YouTube y en blogs personales canal y autor son la misma persona.
+  return (p.includes(al)||al.includes(p))? '' : a;
+}
 function sourceName(it){
   const f=feeds.find(f=>f.id===it.feed_id);
   if(it.author && !GENERIC.has(it.author)) return it.author;
@@ -571,7 +590,7 @@ function cardHTML(it,idx){
   const img=it.thumbnail_url==='none'?'':it.thumbnail_url;
   const thumb=img||(it.video_id?`https://i.ytimg.com/vi/${it.video_id}/hqdefault.jpg`:'');
   const excerpt=clean(it.summary_tldr||it.raw_content||'');
-  const src=sourceName(it), hue=sourceHue(it);
+  const src=pubName(it), by=byline(it), hue=sourceHue(it);
   const when=relTime(it.published_at);
 
   const media = `
@@ -589,7 +608,7 @@ function cardHTML(it,idx){
     <div class="surface">
       ${media}
       <div class="card-body">
-        <div class="meta"><span class="src">${esc(src)}</span>${when?`<span class="when">${esc(when)}</span>`:''}</div>
+        <div class="meta"><span class="src">${esc(src)}</span>${by?`<span class="by">· ${esc(by)}</span>`:''}${when?`<span class="when">${esc(when)}</span>`:''}</div>
         <h2 class="title"><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)}</a></h2>
         ${excerpt?`<p class="excerpt" data-act="sum" data-id="${it.id}">${esc(excerpt)}</p>`:''}
         ${it.curator_note?`<p class="why"><b>Por qué</b>${esc(clean(it.curator_note))}</p>`:''}
@@ -636,7 +655,7 @@ async function fillImages(batch){
     const live=items.find(x=>x.id===it.id); if(live) live.thumbnail_url=it.thumbnail_url;
     if(!ph) continue;
     const im=new Image(); im.alt=''; im.referrerPolicy='no-referrer';
-    im.dataset.ph=sourceHue(it); im.dataset.name=sourceName(it);
+    im.dataset.ph=sourceHue(it); im.dataset.name=pubName(it);
     im.onload=()=>ph.replaceWith(im);
     im.src=url;
   }
@@ -645,7 +664,7 @@ async function fillImages(batch){
 // Ticker: los titulares del lote corren arriba, como el "now playing" de la radio.
 function renderTicker(batch){
   const t=$('#ticker'), run=$('#ticker-run');
-  const heads=batch.slice(0,8).map(i=>`<span><b>${esc(sourceName(i))}</b>${esc(i.title)}</span>`).join('');
+  const heads=batch.slice(0,8).map(i=>`<span><b>${esc(pubName(i))}</b>${esc(i.title)}</span>`).join('');
   // El ticker nunca se oculta: si cambiara de alto, todo el feed brincaría.
   run.innerHTML=heads? heads+heads : '<span>Sin titulares nuevos</span>';
   run.style.setProperty('--dur',Math.max(40,batch.slice(0,8).length*11)+'s');
