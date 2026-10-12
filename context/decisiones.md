@@ -45,3 +45,15 @@ Qué se tomó de cada uno, medido en el navegador:
 - **Freaks Only FM:** JetBrains Mono para todo lo funcional, #0a0a0a con un solo acento rojo (#dc2828), sombras duras desplazadas (4 a 8 px, sin difuminar), cero radios, ticker en marquesina de "now playing" y punto en vivo que pulsa.
 
 Aplicación: Archivo Narrow (sustituto libre de Univers Condensed) para titulares, JetBrains Mono para metadatos y botones, papel #f3f1ec en claro y negro #0a0a0a en oscuro, rojo señal como único acento. Imagen 16:10 a todo el ancho de cada tarjeta, rejilla de 1, 2 o 3 columnas (375, 760 y 1100 px). Movimiento: entrada escalonada de tarjetas, zoom de imagen y subrayado rojo al pasar, ticker con los titulares del lote. Todo se apaga con `prefers-reduced-motion`.
+
+## 2026-10-11 · T2: cómo se abre la app a más personas
+
+Decidido por León al aprobar el plan de T2:
+
+- **Registro por lista de correos** (`FF_CORREOS_PERMITIDOS` en Vercel), no abierto. Solo entran las personas de las diez conversaciones. Se abre en T5.
+- **Tope de IA en beta: 50 análisis por usuario al día para todos**, mientras no exista Pro. Fuentes: 15 en `free`, sin tope en `pro`. La cuenta de León va en `pro`.
+- **La pantalla de acceso va antes del feed.** Sin sesión no se ve nada; la landing pública es T5.
+- **`CRON_SECRET` obligatorio en producción.** Sin él, `/api/cron/sync` responde 401.
+
+Principio técnico que sale de aquí: el navegador solo usa Supabase para iniciar sesión. Toda lectura y escritura pasa por el backend con `service_role`, que filtra por `user_id`. `anon` y `authenticated` no tienen permisos sobre tablas ni funciones (`supabase_migration_v4_rls.sql`).
+

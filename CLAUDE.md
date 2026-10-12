@@ -45,6 +45,7 @@ El costo de tokens lo absorbe el producto. Consecuencia directa: cualquier cambi
 
 - **Backend**: `http.server` de Python servido como una sola función de Vercel. `vercel.json` reescribe todo a `api/index.py`, con `maxDuration` de 60 segundos.
 - **Datos**: Supabase por REST desde `app/db.py`. Cae a SQLite local cuando faltan las variables de entorno, así que todo en `storage.py` tiene dos ramas.
+  El navegador solo usa Supabase para iniciar sesión; todo dato pasa por el backend con `service_role`. `anon` y `authenticated` no tienen permisos sobre tablas ni funciones. Una tabla o RPC nueva no se abre a ellos: se lee desde el backend.
 - **Frontend**: un solo archivo, `app/static/index.html`. CSS propio sin Tailwind, dark mode por `prefers-color-scheme`, delegación de eventos con `data-act`.
 - **Ingesta**: RSS y Atom directo, sin API de YouTube (`app/ingestion.py`). Importador de OPML de Feedly.
 - **IA**: `app/ai_engine.py`, con motor heurístico de respaldo. Ver la deuda abierta en `ROADMAP.md`.
@@ -59,6 +60,8 @@ python3 run.py
 Corre en `localhost:8080`. El preview está registrado como `focusfeed` en `.claude/launch.json`.
 
 Verificación mínima de cualquier cambio de interfaz: 375px y 1280px, claro y oscuro, consola sin errores, sin scroll horizontal.
+
+Cualquier cambio de esquema o de permisos se prueba antes en Postgres local con `tests/rls/probar_migraciones.sh` (roles que imitan a Supabase, dueño sin superusuario) y se le agregan sus casos. El script dice cómo levantarlo. Los rollbacks abortan solos si perderían datos de otra cuenta (que exista el rollback ya lo pide `REVIEW.md`).
 
 ## Permisos
 
