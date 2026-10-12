@@ -13,8 +13,11 @@
 --   · la identidad de user_profile.id (volver a DEFAULT 1 rompe la
 --     segunda cuenta que guarde perfil)
 --
--- Solo vale antes de que alguien entre con Google: con cuentas reales,
--- authenticated volvería a leer el corpus completo. El script lo verifica.
+-- PRECONDICIÓN: el PR B (login) nunca se desplegó, o ya se revirtió y la
+-- llave anon/publishable se rotó en Supabase. Con la llave pública en el
+-- frontend, cualquiera que se registre volvería a leer el corpus completo.
+-- El script solo puede verificar una parte (que no haya cuentas en
+-- auth.users); la otra es tuya.
 -- Los respaldos vuelven a public pero con los permisos que v4 les quitó:
 -- siguen cerrados.
 -- También se queda la identidad de user_profile.id y los default

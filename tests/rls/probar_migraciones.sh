@@ -33,6 +33,7 @@ val(){ psql -X -q -t -A -v ON_ERROR_STOP=1 -d "$BD" -c "$1"; }
 como() {
   local rol=$1 sub=$2 sql=$3 out
   if out=$(psql -X -q -t -A -v ON_ERROR_STOP=1 -d "$BD" 2>"$TMP/err" <<SQL
+SET lc_messages = 'C';
 SET request.jwt.claim.sub = '$sub';
 SET ROLE $rol;
 $sql
@@ -198,7 +199,8 @@ q -c "INSERT INTO auth.users (id, email, created_at) VALUES ('$OTRO', 'tester@ej
       INSERT INTO public.user_profile (user_id, focus_topics) VALUES ('$REAL', '[\"ia\"]');" >/dev/null
 # Que el item "nuevo" exista solo en la cuenta real
 q -c "DELETE FROM public.user_items WHERE user_id = '$DUENO' AND item_id = $ITEM_NUEVO;
-      INSERT INTO public.user_items (user_id, item_id, status) VALUES ('$REAL', $ITEM_NUEVO, 'reading');" >/dev/null
+      INSERT INTO public.user_items (user_id, item_id, status, relevance_score, curator_note, scored_at)
+       VALUES ('$REAL', $ITEM_NUEVO, 'reading', 88, 'Coincide con IA.', NOW());" >/dev/null
 # Quitar la fuente 2 al dueño para que la unión se note
 q -c "DELETE FROM public.subscriptions WHERE user_id = '$DUENO' AND feed_id = 2;" >/dev/null
 # Categoría propia del dueño en la fuente 1; la cuenta nueva trae la semilla.
@@ -210,8 +212,8 @@ ITEM_AUTO=$(val "SELECT item_id FROM public.user_items WHERE user_id = '$DUENO' 
 q -c "UPDATE public.user_items SET status = 'reading', user_rating = 'love', user_feedback_comment = 'clave',
                                   relevance_score = 20, curator_note = 'nota real'
        WHERE user_id = '$DUENO' AND item_id = $ITEM_AUTO;
-      INSERT INTO public.user_items (user_id, item_id, relevance_score, curator_note)
-       VALUES ('$REAL', $ITEM_AUTO, 91, 'nota IA');" >/dev/null
+      INSERT INTO public.user_items (user_id, item_id, relevance_score, curator_note, scored_at)
+       VALUES ('$REAL', $ITEM_AUTO, 91, 'nota IA', NOW());" >/dev/null
 UNION_ITEMS=$(val "SELECT COUNT(DISTINCT item_id) FROM public.user_items WHERE user_id IN ('$DUENO', '$REAL')")
 
 # Like nuevo sobre un item que el dueño tenía guardado: el guardado se queda.
@@ -232,8 +234,8 @@ q -c "UPDATE public.user_items SET status = 'reading' WHERE user_id = '$DUENO' A
       INSERT INTO public.user_items (user_id, item_id, status) VALUES ('$REAL', $ITEM_GUARDADO, 'archived');
       UPDATE public.user_items SET status = 'inbox', relevance_score = 70, curator_note = ''
        WHERE user_id = '$DUENO' AND item_id = $ITEM_PLACE;
-      INSERT INTO public.user_items (user_id, item_id, relevance_score, curator_note)
-       VALUES ('$REAL', $ITEM_PLACE, 91, 'Coincide con IA.');" >/dev/null
+      INSERT INTO public.user_items (user_id, item_id, relevance_score, curator_note, scored_at)
+       VALUES ('$REAL', $ITEM_PLACE, 91, 'Coincide con IA.', NOW());" >/dev/null
 ITEM_DISLIKE=$(val "SELECT item_id FROM public.user_items WHERE user_id = '$DUENO' AND item_id NOT IN ($ITEM_COMUN, $ITEM_NUEVO, $ITEM_AUTO, $ITEM_LIKE, $ITEM_VISTO, $ITEM_GUARDADO, $ITEM_PLACE) ORDER BY item_id LIMIT 1")
 q -c "UPDATE public.user_items SET status = 'reading', user_rating = 'love' WHERE user_id = '$DUENO' AND item_id = $ITEM_DISLIKE;
       INSERT INTO public.user_items (user_id, item_id, status, user_rating, user_feedback_comment)
@@ -258,8 +260,12 @@ check "un guardado viejo sobrevive a un visto nuevo" "reading" \
   "$(val "SELECT status FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_GUARDADO")"
 check "el 70 sin nota de v1 y el score genérico nuevo se borran para recalcular" "null" \
   "$(val "SELECT COALESCE(relevance_score::text, 'null') FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_PLACE")"
-check "ninguna fila conserva un score calculado con los temas por default" "0" \
-  "$(val "SELECT COUNT(*) FROM public.user_items WHERE user_id = '$REAL' AND curator_note IN ('nota IA', 'Coincide con IA.')")"
+check "en la bandeja no queda ningún score de temas por default" "0" \
+  "$(val "SELECT COUNT(*) FROM public.user_items WHERE user_id = '$REAL' AND status = 'inbox' AND curator_note IN ('nota IA', 'Coincide con IA.')")"
+check "en la bandeja no queda ningún 70 sin nota de v1" "0" \
+  "$(val "SELECT COUNT(*) FROM public.user_items WHERE user_id = '$REAL' AND status = 'inbox' AND relevance_score IS NOT NULL AND COALESCE(curator_note, '') = ''")"
+check "un guardado de la cuenta nueva conserva su score (la app no recalcula fuera de la bandeja)" "88" \
+  "$(val "SELECT relevance_score FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_NUEVO")"
 check "un dislike nuevo gana con su estado sobre un guardado viejo" "archived|dislike|clickbait" \
   "$(val "SELECT status || '|' || user_rating || '|' || user_feedback_comment FROM public.user_items WHERE user_id = '$REAL' AND item_id = $ITEM_DISLIKE")"
 check "el tester que entró primero no recibe nada" "0|0" \

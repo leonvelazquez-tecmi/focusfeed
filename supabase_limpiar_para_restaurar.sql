@@ -6,8 +6,11 @@
 -- transacción que el restore (psql --single-transaction -f este -f
 -- restore.sql). Si el restore falla, esta limpieza también se revierte.
 --
--- Solo vale antes de que alguien entre con Google (PR B). Después, el
--- respaldo ya no tiene los datos de esas cuentas: el script se niega.
+-- PRECONDICIÓN: el PR B (login) nunca se desplegó, o ya se revirtió y la
+-- llave anon/publishable se rotó en Supabase. El respaldo trae los permisos
+-- de v1 (GRANT ALL a anon): con la llave pública en el frontend, cualquiera
+-- leería y borraría todo. El script solo verifica que no haya cuentas en
+-- auth.users; lo del PR B es tuyo.
 --
 -- Por qué existe: pg_restore --clean no puede borrar items ni feeds
 -- mientras subscriptions y user_items (que no existen en un respaldo de

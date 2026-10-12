@@ -15,7 +15,7 @@ Archivos:
 | `supabase_rollback_v2.sql` | Regresa a v1. Solo con código anterior a T1. |
 | `supabase_reasignar_dueno.sql` | Después del login: fusiona tu historial en tu uuid de Google. |
 | `supabase_limpiar_para_restaurar.sql` | Solo para restaurar el respaldo. Borra datos. |
-| `tests/rls/probar_migraciones.sh` | Prueba todo lo anterior en un Postgres local, incluida la restauración (98 verificaciones, corriendo como un dueño sin superusuario, igual que el SQL editor). |
+| `tests/rls/probar_migraciones.sh` | Prueba todo lo anterior en un Postgres local, incluida la restauración (100 verificaciones, corriendo como un dueño sin superusuario, igual que el SQL editor). |
 
 ---
 
@@ -164,16 +164,16 @@ Al final, abre la app en el iPhone y en el escritorio: sincronizar, ver feed, ma
 | Síntoma | Qué hacer |
 |---|---|
 | v2 o v4 falla a la mitad | Nada que hacer: cada archivo corre dentro de `BEGIN … COMMIT` y se revierte solo. Mándame el error. |
-| Después de v4 la app no carga datos | Casi seguro el backend no usa la service_role (paso 0). Revisa `vercel env ls`. Si no es eso, corre `supabase_rollback_v4.sql` (solo antes de que alguien entre con Google; después se niega). |
+| Después de v4 la app no carga datos | Casi seguro el backend no usa la service_role (paso 0). Revisa `vercel env ls`. Si no es eso, corre `supabase_rollback_v4.sql`. Solo si el PR B nunca se desplegó; si ya está en producción, primero revierte el PR B y rota la llave anon/publishable en Supabase. |
 | Después de v2 la app no carga datos | Si v4 ya corrió: `supabase_rollback_v4.sql`, luego `supabase_rollback_v2.sql`. Ojo: el código actual de main necesita v2; regresar a v1 implica también regresar el código. Mejor mándame el error primero. |
-| Algo peor, o duda, **antes** de que alguien entre con Google | Restaurar el respaldo (abajo). |
-| Algo sale mal **después** de que alguien entró con Google | No hay vuelta atrás automática: el respaldo no tiene los datos de esas cuentas. Mándame el error. |
+| Algo peor, o duda, y el PR B **nunca** se desplegó | Restaurar el respaldo (abajo). |
+| Algo sale mal con el PR B ya desplegado | No hay vuelta atrás automática: mándame el error. Restaurar o revertir v4 exige primero revertir el PR B y rotar la llave anon/publishable. |
 
 Los dos rollbacks y la limpieza abortan solos, sin tocar nada, si detectan que perderían datos: otra cuenta en la base o el uuid del dueño equivocado.
 
 ### Restaurar el respaldo
 
-Solo vale mientras nadie haya entrado con Google: la limpieza lo verifica y se niega si hay alguna cuenta en `auth.users`. En esa ventana la llave `anon` todavía no está en el frontend, así que regresar a los permisos del respaldo no expone nada.
+Solo vale si el PR B nunca se desplegó (o ya se revirtió y rotaste la llave anon/publishable en Supabase → Project Settings → API Keys). El respaldo trae los permisos del momento en que se tomó, incluido el `GRANT ALL` a `anon` de v1: con la llave pública en el frontend, cualquiera podría leer y borrar todo. La limpieza además se niega si hay cuentas en `auth.users`, pero eso no basta para saber si el PR B está desplegado: eso lo confirmas tú.
 
 Si el respaldo es de antes de v2 (el paso 1 dijo `v2_aplicado = false`), restaurarlo regresa a v1, y el código de main no funciona con v1. Mándame el error antes de restaurar: hay que regresar también el código.
 
@@ -205,13 +205,23 @@ El orden importa. Mientras exista `OWNER FALLBACK` (hasta el PR C), un request *
 
 1. Entra con tu cuenta de Google **en cada dispositivo** donde usas FocusFeed: la PWA del iPhone y el navegador del escritorio. Así ninguno sigue entrando sin login.
 2. Mergea el PR C (borra `OWNER FALLBACK`). Desde ahí, un request sin token válido responde 401 y no ve datos de nadie.
-3. Abre `supabase_reasignar_dueno.sql` y sustituye `REEMPLAZA-CON-TU-CORREO` por tu correo de Google (y `viejo`, si el paso 1 mostró otro uuid en `duenos_v2`). SQL Editor → Run. El script busca tu cuenta por correo: no hay uuid que copiar a mano. Fusiona lo que hayas hecho con la cuenta nueva con tu historial y te pone en plan `pro`.
-4. La variable ya no sirve. Bórrala y haz redeploy desde el dashboard (paso 0):
+3. Respaldo fresco antes de fusionar (la fusión no se deshace sola, y el respaldo del paso 2 es de antes de que existiera tu cuenta):
+
+```bash
+F=~/focusfeed_respaldos/focusfeed_pre_reasignar_$(date +%Y%m%d_%H%M).dump
+read -s PGURL
+pg_dump "$PGURL" --schema=public --no-owner -Fc -f "$F"
+unset PGURL
+pg_restore --list "$F" | grep -c 'TABLE DATA'
+```
+
+4. Abre `supabase_reasignar_dueno.sql` y sustituye `REEMPLAZA-CON-TU-CORREO` por tu correo de Google (y `viejo`, si el paso 1 mostró otro uuid en `duenos_v2`). SQL Editor → Run. El script busca tu cuenta por correo: no hay uuid que copiar a mano. Fusiona lo que hayas hecho con la cuenta nueva con tu historial y te pone en plan `pro`.
+5. La variable ya no sirve. Bórrala y haz redeploy desde el dashboard (paso 0):
 
 ```bash
 vercel env rm FOCUSFEED_OWNER_ID production --yes
 ```
 
-5. Recarga la app en cada dispositivo: debes ver tus fuentes y tu historial.
+6. Recarga la app en cada dispositivo: debes ver tus fuentes y tu historial.
 
 Las credenciales de Google y las variables de Vercel del login vienen en el PR B.

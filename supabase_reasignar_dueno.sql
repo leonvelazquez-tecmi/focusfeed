@@ -23,8 +23,9 @@
 --       guardado: un guardado nunca se pierde. Si diste un rating, gana ese
 --       rating con su comentario. Lo que no tocaste se queda como estaba.
 --       Un dislike nuevo gana con su estado (lo sacaste del feed).
---       El score de IA viejo se queda si es real; los de la cuenta nueva
---       se borran para que la app los recalcule con tus temas.
+--       En la bandeja, los scores de la cuenta nueva (temas por default) y
+--       los 70 sin nota de v1 se borran para que la app los recalcule con
+--       tus temas. Fuera de la bandeja se quedan: la app no recalcula ahí.
 --     · perfil: se queda el viejo (temas y preferencias aprendidas). Si en
 --       la cuenta nueva ya escribiste temas, el script aborta y te avisa,
 --       para que decidas tú. Lo que la cuenta nueva aprendió de tus likes
@@ -42,9 +43,10 @@ DECLARE
     viejo UUID := '00000000-0000-0000-0000-000000000001';
     correo TEXT := 'REEMPLAZA-CON-TU-CORREO';
     nuevo UUID;
+    nuevo_desde TIMESTAMPTZ;
     n_subs INTEGER;
 BEGIN
-    SELECT id INTO nuevo FROM auth.users WHERE lower(email) = lower(correo);
+    SELECT id, created_at INTO nuevo, nuevo_desde FROM auth.users WHERE lower(email) = lower(correo);
     IF nuevo IS NULL THEN
         RAISE EXCEPTION 'No hay cuenta con el correo %: entra primero con Google', correo;
     END IF;
@@ -74,14 +76,6 @@ BEGIN
                     WHERE n.user_id = nuevo AND n.feed_id = v.feed_id);
     UPDATE public.subscriptions SET user_id = nuevo WHERE user_id = viejo;
 
-    -- Todo score de la cuenta nueva se calculó con los temas por default
-    -- (el perfil nuevo no tiene temas: se verificó arriba) y el perfil que
-    -- se queda es el viejo. Se borran para que la app los recalcule con tus
-    -- temas; score_pending_for_user solo puntúa filas sin score.
-    UPDATE public.user_items
-       SET relevance_score = NULL, curator_note = NULL, scored_at = NULL
-     WHERE user_id = nuevo;
-
     -- Items en las dos cuentas, campo por campo: la cuenta nueva crea filas
     -- sola (el score de IA al entrar) con valores por default. Un default no
     -- es una decisión tuya y no pisa lo viejo. Un like nuevo no borra un
@@ -102,13 +96,14 @@ BEGIN
                                         THEN v.user_feedback_comment ELSE n.user_feedback_comment END,
            feedback_at = CASE WHEN COALESCE(n.user_rating, 'none') = 'none'
                               THEN v.feedback_at ELSE n.feedback_at END,
-           -- Se queda el score viejo si es real (siempre trae nota). El 70 sin
-           -- nota que v1 ponía al ingerir es un placeholder: queda NULL para
-           -- que la app lo recalcule con tus temas.
+           -- Se queda el score viejo si es real (siempre trae nota); si no,
+           -- el de la cuenta nueva. El paso de abajo decide cuáles recalcular.
            relevance_score = CASE WHEN COALESCE(v.curator_note, '') <> ''
-                                  THEN v.relevance_score END,
+                                  THEN v.relevance_score ELSE n.relevance_score END,
            curator_note = CASE WHEN COALESCE(v.curator_note, '') <> ''
-                               THEN v.curator_note END
+                               THEN v.curator_note ELSE n.curator_note END,
+           scored_at = CASE WHEN COALESCE(v.curator_note, '') <> ''
+                            THEN v.scored_at ELSE n.scored_at END
       FROM public.user_items v
      WHERE n.user_id = nuevo AND v.user_id = viejo AND v.item_id = n.item_id;
     DELETE FROM public.user_items v
@@ -116,6 +111,17 @@ BEGIN
        AND EXISTS (SELECT 1 FROM public.user_items n
                     WHERE n.user_id = nuevo AND n.item_id = v.item_id);
     UPDATE public.user_items SET user_id = nuevo WHERE user_id = viejo;
+
+    -- Scores a recalcular con tus temas: los que la cuenta nueva calculó
+    -- con los temas por default (scored_at desde que se creó) y los 70 sin
+    -- nota que v1 ponía al ingerir. Solo en la bandeja: la app solo puntúa
+    -- ahí (score_pending_for_user), así que fuera de la bandeja se quedan.
+    UPDATE public.user_items
+       SET relevance_score = NULL, curator_note = NULL, scored_at = NULL
+     WHERE user_id = nuevo
+       AND status = 'inbox'
+       AND relevance_score IS NOT NULL
+       AND (COALESCE(curator_note, '') = '' OR scored_at >= nuevo_desde);
 
     UPDATE public.ai_usage SET user_id = nuevo WHERE user_id = viejo;
 
