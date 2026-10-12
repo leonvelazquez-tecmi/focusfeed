@@ -16,7 +16,7 @@ La línea de llegada del ciclo: dos cuentas distintas, cada una con sus fuentes 
 - `tests/test_multitenancy.py`: 18 verificaciones de aislamiento, todas en verde.
 - Verificado también sobre HTTP y en pantalla con dos cuentas simultáneas.
 
-**Pendiente humano antes de que esto llegue a producción:** correr `supabase_schema_v2.sql` en el SQL editor de Supabase, sustituyendo el uuid del bloque de migración por el de la cuenta real.
+**Pendiente humano antes de que esto llegue a producción:** correr `supabase_schema_v2.sql` y `supabase_migration_v4_rls.sql` siguiendo `docs/runbook_T2.md`. El uuid de v2 se deja como está; la reasignación a tu cuenta real va después del login.
 
 **T7. Títulos reales.** Hecho y verificado el 8-oct.
 - Causa: `find(a) or find(b)` en `app/ingestion.py`. Un `Element` de ElementTree sin hijos es falsy, así que el `or` descartaba el título, el link, el autor y la fecha de todo YouTube y todo Atom. Por eso salían "Sin título" con fecha "ahora".
@@ -42,16 +42,16 @@ La línea de llegada del ciclo: dos cuentas distintas, cada una con sus fuentes 
 - Falta: medir contra likes y dislikes reales de producción, y conectar `score_with_jev` en `app/ai_engine.py` (cambia el prompt de IA y el costo por usuario: pregunta primero).
 
 
-**T2. Autenticación.**
-Supabase Auth con Google OAuth. Reusar el patrón de kanban-publico.
-Lo que ya quedó listo del lado del código: `app/auth.py` verifica JWT HS256 de Supabase y falla cerrado si no hay secreto configurado. Falta la parte que depende del dashboard.
+**T2. Autenticación.** Cuatro PRs, en este orden de deploy. Decisiones en `context/decisiones.md` (11-oct).
 
-Bloqueado por trabajo humano:
-1. Habilitar el proveedor de Google en Supabase Auth y cargar las credenciales de OAuth.
-2. Poner `SUPABASE_JWT_SECRET` y `FOCUSFEED_OWNER_ID` en las variables de Vercel.
-3. Decidir si la pantalla de acceso va antes o después de mostrar el primer feed.
+- **A. Base cerrada (RLS v4).** Hecho, en borrador: [leonvelazquez-tecmi/focusfeed#14](https://github.com/leonvelazquez-tecmi/focusfeed/pull/14). Scripts, runbook (`docs/runbook_T2.md`) y 100 verificaciones locales en `tests/rls/`. No toca la app.
+  Pendiente humano: correr el runbook, pasos 0 a 5, **antes** de mergear el PR B. Mandar a Claude la fila del diagnóstico del paso 1.
+- **B. Pantalla de acceso + token.** Por hacer. supabase-js por CDN con versión fija, `GET /api/config` con URL y llave anon, `Authorization: Bearer` en `api()`, lista de correos. Un token presente pero inválido responde 401 y **nunca** cae a `OWNER FALLBACK`. Verificar JWT HS256 y, si el proyecto firma con ES256, validar contra `/auth/v1/user` con caché.
+  Pendiente humano: credenciales OAuth de Google, proveedor en Supabase, `SUPABASE_ANON_KEY` y `FF_CORREOS_PERMITIDOS` en Vercel.
+- **C. Borrar `OWNER FALLBACK` de `app/auth.py`** y exigir `CRON_SECRET`. Se mergea horas después de B, no días: León entra en cada dispositivo, mergea C, saca respaldo y corre `supabase_reasignar_dueno.sql`.
+- **D. Topes por usuario.** 15 fuentes en `free`; 50 análisis de IA al día. `process-pending` hoy analiza el corpus global: tiene que limitarse a lo que sigue cada usuario.
 
-Cuando eso exista, falta escribir: pantalla de acceso en `index.html`, envío del token en cada llamada, y **eliminar el respaldo `OWNER FALLBACK` de `app/auth.py`**, que hoy deja pasar cualquier request sin token como si fuera el dueño.
+Verificación final de T2: dos cuentas de Google en pantalla, cada una con lo suyo. Desde la nube Claude solo puede hacerlo en local con tokens firmados; la prueba con Google real es de León.
 
 ## Cola, en este orden
 
@@ -79,11 +79,13 @@ Escrito a propósito, para que no se construya de más:
 - **"Para ti" sube artículos de 2023 a 2025.** El score no pesa la antigüedad. Las imágenes de esos items se piden bajo demanda (`/api/items/fill-images`), no con un llenado del histórico. Arreglar el orden toca el score de IA: pregunta primero.
 
 - **La IA sigue sin correr en producción.** La causa original (las credenciales se perdían en `fetch_profile`) ya está arreglada: ahora la llave se lee de `GEMINI_API_KEY` del entorno. Falta ponerla en Vercel y decidir el modelo definitivo. Sin esa variable, el motor de respaldo entrega resumen sin modelo y score determinista.
-- **RLS apagado y `GRANT ALL` a `anon`** en el esquema v1 que sigue vivo en producción. `supabase_schema_v2.sql` ya lo corrige, pero nadie lo ha corrido todavía.
+- **RLS apagado y `GRANT ALL` a `anon`** en el esquema v1 que sigue vivo en producción. v2 no lo cierra del todo (respaldos legibles con la llave anon, corpus legible por cualquier cuenta). `supabase_migration_v4_rls.sql` lo cierra y el orden para correrlo está en `docs/runbook_T2.md`. Tiene que correr antes de publicar el login.
 - **`OWNER FALLBACK` en `app/auth.py`.** Cualquier request sin token válido se atiende como si fuera el dueño. Es intencional para que la app siga funcionando durante T2, y es lo primero que hay que borrar cuando el acceso esté puesto.
 - **El cron no escala.** Ya va en tandas de 40 y salta lo fresco, pero sigue siendo una sola función con presupuesto de 45 segundos.
-- **Migración pendiente:** `supabase_migration_v3_feed_cache.sql` (columnas `etag` y `last_modified` en `feeds`). Sin ella la sync funciona, pero sin caché condicional en producción.
+- **Migración pendiente:** `supabase_migration_v3_feed_cache.sql` (columnas `etag` y `last_modified` en `feeds`). Sin ella la sync funciona, pero sin caché condicional en producción. Va incluida en v4.
 - **El repo vive en cuenta institucional.** Mover a cuenta personal antes de que `customers/` tenga nombres y correos reales. Ese es el disparador, no una fecha.
 - **Sin confirmar: el guardado que se perdió el 18-ago.** El diagnóstico mostró la fila del dislike con `status='inbox'` (bug ya corregido), pero ninguna fila con `status='reading'` entre las 20 más recientes. Como todas las filas de la migración comparten `created_at`, el orden entre ellas es arbitrario y la consulta pudo dejarla fuera. La hipótesis principal es que la escritura falló en silencio, que es justo lo que el manejo de errores nuevo ahora hace visible. Si vuelve a pasar, ahora sale un toast con el error real.
 - **`set_item_status` y `feedback` no validan suscripción.** Un usuario puede crear una fila en `user_items` para un item de un feed al que no está suscrito. No filtra datos de nadie (la lectura del feed sí valida la suscripción) y no devuelve contenido ajeno, pero ensucia la tabla. Should fix, no bloquea.
+- **`test_ingestion.py` falla en main** ("Atom: título vacío cae a la primera línea"). No es de T2. Should fix.
+- **`/api/items` devuelve `debug` con un prefijo de la llave de Supabase y el último error de consulta.** Con llaves nuevas (`sb_secret_…`) filtra 5 caracteres. Se recorta a un booleano en el PR C.
 - **Nada de esto está subido.** El rediseño estilo Feedly, los arreglos de guardados y visto persistente, y todo T1 están en local, sin commit ni push.
