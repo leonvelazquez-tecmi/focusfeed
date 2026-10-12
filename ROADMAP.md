@@ -76,7 +76,7 @@ Escrito a propósito, para que no se construya de más:
 
 ## Deuda conocida
 
-- **"Para ti" sube artículos de 2023 a 2025.** El score no pesa la antigüedad. Las imágenes de esos items se piden bajo demanda (`/api/items/fill-images`), no con un llenado del histórico. Arreglar el orden toca el score de IA: pregunta primero.
+- **"Para ti" sube artículos de 2023 a 2025.** Hecho el 12-oct. El orden ahora resta 2 puntos por día de antigüedad, tope 40, sin tocar el score guardado ni el prompt de JEV (`supabase_migration_v4_feed_recency.sql` y la rama SQLite de `app/storage.py`; prueba en `tests/test_feed_recency.py`). La tarjeta muestra mes y año cuando el item tiene más de 11 meses. **Falta aplicar la migración v4 en el dashboard de Supabase** (tarea humana). Las imágenes de esos items se siguen pidiendo bajo demanda (`/api/items/fill-images`).
 
 - **La IA sigue sin correr en producción.** La causa original (las credenciales se perdían en `fetch_profile`) ya está arreglada: ahora la llave se lee de `GEMINI_API_KEY` del entorno. Falta ponerla en Vercel y decidir el modelo definitivo. Sin esa variable, el motor de respaldo entrega resumen sin modelo y score determinista.
 - **RLS apagado y `GRANT ALL` a `anon`** en el esquema v1 que sigue vivo en producción. `supabase_schema_v2.sql` ya lo corrige, pero nadie lo ha corrido todavía.

@@ -371,6 +371,8 @@ function relTime(iso){
   if(s<86400) return Math.floor(s/3600)+'h';
   if(s<604800) return Math.floor(s/86400)+'d';
   if(s<2419200) return Math.floor(s/604800)+' sem';
+  // Con más de 11 meses el día ya no dice nada: se muestra mes y año.
+  if(s>=28512000) return d.toLocaleDateString('es-MX',{month:'short',year:'numeric'});
   return d.toLocaleDateString('es-MX',{day:'numeric',month:'short'});
 }
 function clean(t){
