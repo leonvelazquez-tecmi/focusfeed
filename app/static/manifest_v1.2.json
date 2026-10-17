@@ -1,0 +1,16 @@
+{
+  "name": "FocusFeed",
+  "short_name": "FocusFeed",
+  "description": "Tu feed curado por IA, que aterriza en tu vault",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f1ec",
+  "theme_color": "#f3f1ec",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3669/3669986.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
