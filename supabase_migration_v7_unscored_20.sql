@@ -6,10 +6,8 @@
 -- Idempotente: CREATE OR REPLACE, se puede correr más de una vez.
 -- Espejo local: app/storage.py, rama SQLite de fetch_items.
 
-CREATE OR REPLACE, se puede correr más de una vez.
 -- Espejo local: app/storage.py, rama SQLite de fetch_items.
 
-CREATE OR REPLACE, se puede correr más de una vez.
 -- Espejo local: app/storage.py, rama SQLite de fetch_items.
 
 CREATE OR REPLACE FUNCTION public.get_user_feed(
