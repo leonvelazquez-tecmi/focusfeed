@@ -77,10 +77,12 @@ def main():
     print("\n1. Orden de 'Para ti' con decaimiento")
     orden = [i["guid"] for i in storage.fetch_items(LEON, tab="curated")["items"]]
     print(f"     {orden}")
-    # Efectivos esperados: hoy-sin-score 70, reciente-65 63, viejo-95 55,
-    # mes-90 50 (90 - 40 tope), semana-52 38.
-    esperado = ["hoy-sin-score", "reciente-65", "viejo-95", "mes-90", "semana-52"]
-    check("Un item de hoy sin calificar va primero", orden[0] == "hoy-sin-score")
+    # Sin calificar arranca en 40 (v5). Efectivos esperados: reciente-65 63,
+    # viejo-95 55, mes-90 50 (90 - 40 tope), hoy-sin-score 40, semana-52 38.
+    esperado = ["reciente-65", "viejo-95", "mes-90", "hoy-sin-score", "semana-52"]
+    check("Lo que JEV aprobó (65 de ayer) le gana a lo de hoy sin calificar", orden[0] == "reciente-65")
+    check("Lo de hoy sin calificar le gana a un 52 ya calificado de hace una semana",
+          orden.index("hoy-sin-score") < orden.index("semana-52"))
     check("Un 65 de ayer le gana a un 95 de hace más de un año", orden.index("reciente-65") < orden.index("viejo-95"))
     check("El castigo tiene tope: el 95 viejo sigue arriba del 52 de hace una semana",
           orden.index("viejo-95") < orden.index("semana-52"))
