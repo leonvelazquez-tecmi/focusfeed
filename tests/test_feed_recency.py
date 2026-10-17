@@ -96,8 +96,10 @@ def main():
 
     print("\n3. 'Todo' sigue por fecha, sin decaimiento")
     todo = [i["guid"] for i in storage.fetch_items(LEON, tab="inbox")["items"]]
-    check("Primero el más nuevo, al final el más viejo",
-          todo[0] == "hoy-sin-score" and todo[-1] == "viejo-95", str(todo))
+    # La diversificación por fuente puede mover items; lo que no debe pasar es que
+    # el score o el decaimiento reordenen "Todo": los dos más nuevos van primero.
+    check("Los dos más nuevos van primero, sin importar el score",
+          todo[:2] == ["hoy-sin-score", "reciente-65"], str(todo))
 
     print("\n" + "=" * 58)
     if fallos:
