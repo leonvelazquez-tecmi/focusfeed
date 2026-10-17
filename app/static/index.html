@@ -98,6 +98,11 @@
   .ticker .run span{padding:0 18px}
   .ticker .run b{color:var(--accent);padding-right:18px}
   .ticker:hover .run{animation-play-state:paused}
+  .ticker .run .hl{cursor:pointer}
+  .ticker .run .hl:hover,.ticker .run .hl:focus-visible{text-decoration:underline;text-underline-offset:3px;outline:none}
+  .card{scroll-margin-top:calc(var(--hdr,60px) + 70px)}
+  .card.flash{animation:flash 1.4s ease-out}
+  @keyframes flash{0%,60%{outline:4px solid var(--accent);outline-offset:4px}100%{outline:4px solid transparent;outline-offset:4px}}
   @keyframes tick{to{transform:translateX(-50%)}}
   @keyframes pulse{50%{opacity:.25}}
 
@@ -250,7 +255,7 @@
       </button>
     </div>
   </div>
-  <div class="ticker" id="ticker" aria-hidden="true"><span class="live"><i></i><span id="ticker-live">En el aire</span></span><div class="track"><div class="run" id="ticker-run"></div></div></div>
+  <div class="ticker" id="ticker"><span class="live"><i></i><span id="ticker-live">En el aire</span></span><div class="track"><div class="run" id="ticker-run"></div></div></div>
 </header>
 
 <nav class="tabs">
@@ -664,12 +669,26 @@ async function fillImages(batch){
 // Ticker: los titulares del lote corren arriba, como el "now playing" de la radio.
 function renderTicker(batch){
   const t=$('#ticker'), run=$('#ticker-run');
-  const heads=batch.slice(0,8).map(i=>`<span><b>${esc(pubName(i))}</b>${esc(i.title)}</span>`).join('');
+  const head=(i,dup)=>`<span class="hl" data-act="goto" data-id="${i.id}" role="link" ${dup?'aria-hidden="true" tabindex="-1"':'tabindex="0"'}><b>${esc(pubName(i))}</b>${esc(i.title)}</span>`;
+  const top=batch.slice(0,8);
+  const heads=top.map(i=>head(i,false)).join('')+top.map(i=>head(i,true)).join('');
   // El ticker nunca se oculta: si cambiara de alto, todo el feed brincaría.
-  run.innerHTML=heads? heads+heads : '<span>Sin titulares nuevos</span>';
+  run.innerHTML=heads?heads: '<span>Sin titulares nuevos</span>';
   run.style.setProperty('--dur',Math.max(40,batch.slice(0,8).length*11)+'s');
 }
 new ResizeObserver(()=>document.documentElement.style.setProperty('--hdr',$('.topbar').offsetHeight+'px')).observe($('.topbar'));
+
+function gotoCard(id){
+  const el=document.querySelector(`#feed .card[data-id="${id}"]`);
+  if(!el){ toast('Ese artículo ya no está en la lista'); return; }
+  el.scrollIntoView({behavior:'smooth',block:'start'});
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  setTimeout(()=>el.classList.remove('flash'),1500);
+}
+document.addEventListener('keydown',e=>{
+  const h=e.target.closest&&e.target.closest('.hl[data-act="goto"]');
+  if(h&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); gotoCard(+h.dataset.id); }
+});
 
 function render(animate){
   const feed=$('#feed');
@@ -904,6 +923,7 @@ document.addEventListener('click',async e=>{
   else if(act==='love') rate(id,'love');
   else if(act==='dislike') rate(id,'dislike');
   else if(act==='sum'){ const s=$('#sum-'+id); s.classList.toggle('hidden'); const b=document.querySelector(`.act.right[data-id="${id}"]`); if(b) b.textContent=s.classList.contains('hidden')?'▾':'▴'; }
+  else if(act==='goto') gotoCard(id);
   else if(act==='markall') markAllRead();
   else if(act==='show-new') showNew();
   else if(act==='sync') syncAll();
