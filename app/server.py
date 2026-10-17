@@ -247,6 +247,22 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(f.read())
             return
 
+        ICONOS = {
+            "/icon.svg": "image/svg+xml", "/icon-192.png": "image/png",
+            "/icon-512.png": "image/png", "/apple-touch-icon.png": "image/png",
+            "/favicon-32.png": "image/png", "/favicon.ico": "image/x-icon",
+        }
+        if path in ICONOS:
+            with open(os.path.join(STATIC_DIR, path.lstrip("/")), "rb") as f:
+                body = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', ICONOS[path])
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Cache-Control', 'public, max-age=86400')
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == "/api/health/ai":
             # Canario público de la IA. Cacheado 10 min para que nadie pueda
             # usarlo para gastar tokens. 503 si Gemini o JEV fallan.
