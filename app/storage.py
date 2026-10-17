@@ -100,7 +100,7 @@ def fetch_items(user_id: str, tab="curated", type_filter="all", limit=120):
             # SQLite no entiende fechas RFC 822 (pubDate crudo de RSS): esas
             # quedan sin castigo en local. En Postgres sí se parsean.
             base += """
-             ORDER BY COALESCE(ui.relevance_score, 40)
+             ORDER BY COALESCE(ui.relevance_score, 20)
                       - MIN(60.0, 2.0 * MAX(0.0,
                           julianday('now') - COALESCE(julianday(i.published_at), julianday('now'))))
                       DESC,

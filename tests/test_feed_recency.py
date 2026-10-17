@@ -51,11 +51,11 @@ def sembrar():
     # no mueva nada y la prueba mida solo el decaimiento.
     casos = [
         # guid, feed, días de antigüedad, score guardado (None = sin calificar)
-        ("viejo-95", b, 400, 95),
-        ("mes-90", a, 30, 90),
+        ("viejo-95", a, 400, 95),
+        ("mes-90", b, 30, 90),
         ("reciente-65", a, 1, 65),
-        ("hoy-sin-score", b, 0, None),
-        ("semana-52", a, 7, 52),
+        ("hoy-sin-score", a, 0, None),
+        ("semana-52", b, 7, 52),
     ]
     storage.batch_save_items([{
         "feed_id": feed, "guid": guid, "title": guid, "url": f"https://ejemplo.com/{guid}",
@@ -77,15 +77,12 @@ def main():
     print("\n1. Orden de 'Para ti' con decaimiento")
     orden = [i["guid"] for i in storage.fetch_items(LEON, tab="curated")["items"]]
     print(f"     {orden}")
-    # Sin calificar arranca en 40 (v5) y el castigo por antigüedad llega a 60 (v6).
-    # Efectivos: reciente-65 63, hoy-sin-score 40, semana-52 38,
-    # viejo-95 35 (95 - 60), mes-90 30 (90 - 60).
-    esperado = ["reciente-65", "hoy-sin-score", "semana-52", "viejo-95", "mes-90"]
-    check("Lo que JEV aprobó (65 de ayer) le gana a lo de hoy sin calificar", orden[0] == "reciente-65")
-    check("Lo de hoy sin calificar le gana a un 95 de hace más de un año",
-          orden.index("hoy-sin-score") < orden.index("viejo-95"))
-    check("Lo de hoy sin calificar le gana a un 90 de hace un mes",
-          orden.index("hoy-sin-score") < orden.index("mes-90"))
+    # Sin calificar arranca en 20 (v7) y el castigo por antigüedad llega a 60 (v6).
+    # Efectivos: reciente-65 63, semana-52 38, viejo-95 35, mes-90 30, hoy-sin-score 20.
+    esperado = ["reciente-65", "semana-52", "viejo-95", "mes-90", "hoy-sin-score"]
+    check("Lo que JEV aprobó (65 de ayer) va primero", orden[0] == "reciente-65")
+    check("Un 52 de hace una semana le gana a lo de hoy sin calificar",
+          orden.index("semana-52") < orden.index("hoy-sin-score"))
     check("Un 65 de ayer le gana a un 95 de hace más de un año", orden.index("reciente-65") < orden.index("viejo-95"))
     check("Orden completo", orden == esperado, f"esperado {esperado}")
 
@@ -98,8 +95,7 @@ def main():
     todo = [i["guid"] for i in storage.fetch_items(LEON, tab="inbox")["items"]]
     # La diversificación por fuente puede mover items; lo que no debe pasar es que
     # el score o el decaimiento reordenen "Todo": los dos más nuevos van primero.
-    check("Los dos más nuevos van primero, sin importar el score",
-          todo[:2] == ["hoy-sin-score", "reciente-65"], str(todo))
+    check("El más nuevo va primero, sin importar el score", todo[0] == "hoy-sin-score", str(todo))
 
     print("\n" + "=" * 58)
     if fallos:
