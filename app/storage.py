@@ -95,7 +95,16 @@ def fetch_items(user_id: str, tab="curated", type_filter="all", limit=120):
             params.append(type_filter)
 
         if tab == "curated":
-            base += " ORDER BY COALESCE(ui.relevance_score, 70) DESC, i.published_at DESC"
+            # Espejo de supabase_migration_v4_feed_recency.sql: el score de JEV
+            # no cambia, pero pierde 2 puntos por día de antigüedad, tope 60.
+            # SQLite no entiende fechas RFC 822 (pubDate crudo de RSS): esas
+            # quedan sin castigo en local. En Postgres sí se parsean.
+            base += """
+             ORDER BY COALESCE(ui.relevance_score, 20)
+                      - MIN(60.0, 2.0 * MAX(0.0,
+                          julianday('now') - COALESCE(julianday(i.published_at), julianday('now'))))
+                      DESC,
+                      i.published_at DESC"""
         else:
             base += " ORDER BY i.published_at DESC"
         base += " LIMIT ?"

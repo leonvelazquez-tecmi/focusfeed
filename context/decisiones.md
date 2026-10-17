@@ -53,3 +53,9 @@ Ajusta el disparador del 17-ago ("el repo se queda por ahora en la cuenta instit
 Qué se mueve: repo de GitHub, proyecto de Vercel, proyecto de Supabase y la carpeta de Drive. Stripe o Ko-fi se abren directo en la cuenta personal.
 
 Condición previa y detalle: en el brief de pago voluntario v1.1, fuera del repo.
+
+## 2026-10-17 · Corrección: el proyecto de Supabase vive en la cuenta personal
+
+El proyecto de Supabase de FocusFeed está en la cuenta de Supabase personal de León (la de su Gmail), organización **Personal**. No está en las organizaciones Tecmilenio ni Tecmilenio Anual. Corrige lo que decía la entrada del 11-oct, que lo ubicaba en la cuenta institucional.
+
+Para qué sirve: cualquier migración o consulta SQL se corre en el dashboard de esa cuenta. Repo y Vercel siguen en la cuenta institucional.

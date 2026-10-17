@@ -40,6 +40,7 @@ La línea de llegada del ciclo: dos cuentas distintas, cada una con sus fuentes 
 **T9. "Para ti" con JEV.** Spike hecho el 8-oct (`routines/jev_scoring_spike.py`), falta conectarlo.
 - 150 items recientes: USD 0.024 por cada 1,000 items, latencia mediana 0.4 s. La heurística actual le da 52 a casi todo; JEV pone arriba IA, agentes y PKM, y hasta abajo late-night shows y nota roja.
 - Falta: medir contra likes y dislikes reales de producción, y conectar `score_with_jev` en `app/ai_engine.py` (cambia el prompt de IA y el costo por usuario: pregunta primero).
+- **Disparador de la calibración (17-oct):** con 15 calificaciones con score de JEV ya se ve que ordena bien pero puntúa bajo. Repetir la medición cuando haya unas 50: correr en el SQL Editor la consulta de `user_items` con `ai_usage.kind = 'jev_score'` agrupada por `user_rating`, y `python3 routines/jev_eval.py` en la computadora de León (necesita `OPENROUTER_API_KEY` y las variables de Supabase). Cambiar el criterio de JEV es cambio de prompt: plan y visto bueno primero.
 
 
 **T2. Autenticación.**
@@ -76,14 +77,18 @@ Escrito a propósito, para que no se construya de más:
 
 ## Deuda conocida
 
-- **"Para ti" sube artículos de 2023 a 2025.** El score no pesa la antigüedad. Las imágenes de esos items se piden bajo demanda (`/api/items/fill-images`), no con un llenado del histórico. Arreglar el orden toca el score de IA: pregunta primero.
+- **"Para ti" sube artículos de 2023 a 2025.** Resuelto el 17-oct. El orden resta 2 puntos por día de antigüedad (tope 60), lo sin calificar arranca en 20 y el score guardado no cambia. La tarjeta muestra mes y año con más de 11 meses.
+  - Aplicadas por León en Supabase y verificadas con su consulta real: v4 a v7. Para un entorno nuevo basta `supabase_migration_v7_unscored_20.sql`; v4 a v6 quedan superseded. Rollback: `supabase_rollback_get_user_feed.sql`.
+  - Código: rama SQLite de `app/storage.py` y `tests/test_feed_recency.py`.
+  - Calibración de JEV con 15 calificaciones: corazones promedian 22 (de 9 a 45), pulgares abajo 8 (de 4 a 22). Ordena bien pero puntúa bajo. Ver T9.
+  - Deuda que dejó la revisión (Should fix): las constantes (20, 2 por día, 60) viven duplicadas en la migración, en `storage.py` y en la prueba; la rama SQLite no castiga fechas nulas ni RFC 822 como lo hace Postgres; el corte de 330 días de `relTime` es un número suelto y el formato de mes y año no se probó en Safari de iPhone.
 
 - **La IA sigue sin correr en producción.** La causa original (las credenciales se perdían en `fetch_profile`) ya está arreglada: ahora la llave se lee de `GEMINI_API_KEY` del entorno. Falta ponerla en Vercel y decidir el modelo definitivo. Sin esa variable, el motor de respaldo entrega resumen sin modelo y score determinista.
 - **RLS apagado y `GRANT ALL` a `anon`** en el esquema v1 que sigue vivo en producción. `supabase_schema_v2.sql` ya lo corrige, pero nadie lo ha corrido todavía.
 - **`OWNER FALLBACK` en `app/auth.py`.** Cualquier request sin token válido se atiende como si fuera el dueño. Es intencional para que la app siga funcionando durante T2, y es lo primero que hay que borrar cuando el acceso esté puesto.
 - **El cron no escala.** Ya va en tandas de 40 y salta lo fresco, pero sigue siendo una sola función con presupuesto de 45 segundos.
-- **Migración pendiente:** `supabase_migration_v3_feed_cache.sql` (columnas `etag` y `last_modified` en `feeds`). Sin ella la sync funciona, pero sin caché condicional en producción.
-- **El repo vive en cuenta institucional.** Se migra a cuenta personal (repo, Vercel, Supabase, Drive) cuando se decida lanzar. Ver `context/decisiones.md`, 11-oct-2026.
+- **Migración v3 aplicada por León el 17-oct:** `supabase_migration_v3_feed_cache.sql` (columnas `etag` y `last_modified` en `feeds`). La sync ya puede usar caché condicional en producción.
+- **El repo vive en cuenta institucional.** Se migra a cuenta personal (repo, Vercel, Drive) cuando se decida lanzar. Supabase ya está en la cuenta personal. Ver `context/decisiones.md`, 11 y 17-oct-2026.
 - **Sin confirmar: el guardado que se perdió el 18-ago.** El diagnóstico mostró la fila del dislike con `status='inbox'` (bug ya corregido), pero ninguna fila con `status='reading'` entre las 20 más recientes. Como todas las filas de la migración comparten `created_at`, el orden entre ellas es arbitrario y la consulta pudo dejarla fuera. La hipótesis principal es que la escritura falló en silencio, que es justo lo que el manejo de errores nuevo ahora hace visible. Si vuelve a pasar, ahora sale un toast con el error real.
 - **`set_item_status` y `feedback` no validan suscripción.** Un usuario puede crear una fila en `user_items` para un item de un feed al que no está suscrito. No filtra datos de nadie (la lectura del feed sí valida la suscripción) y no devuelve contenido ajeno, pero ensucia la tabla. Should fix, no bloquea.
 - **Nada de esto está subido.** El rediseño estilo Feedly, los arreglos de guardados y visto persistente, y todo T1 están en local, sin commit ni push.
