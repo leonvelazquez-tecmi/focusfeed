@@ -60,6 +60,18 @@ Corre en `localhost:8080`. El preview está registrado como `focusfeed` en `.cla
 
 Verificación mínima de cualquier cambio de interfaz: 375px y 1280px, claro y oscuro, consola sin errores, sin scroll horizontal.
 
+### En sesiones en la nube
+
+- Las pruebas son scripts, no pytest (no está instalado): `python3 tests/test_feed_recency.py`, `python3 tests/test_multitenancy.py`.
+- No hay preview registrado ni acceso a producción (el proxy bloquea `focusfeed-olive.vercel.app`). Se verifica en local con SQLite: sembrar items de edades distintas y capturar con Playwright (`/opt/node22/lib/node_modules/playwright`, Chromium en `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`).
+- Para apagar el servidor local, mata el PID. `pkill -f "python3 run.py"` también mata el shell de la sesión.
+
+### Migraciones de Supabase
+
+Las aplica León a mano, nunca la sesión. El proyecto está en su cuenta personal de Supabase (la del Gmail), organización Personal. Ver `context/decisiones.md`, 17-oct.
+
+Al entregar una migración: el SQL completo en un bloque para copiar y pegar en el SQL Editor, los pasos numerados desde el dashboard, una consulta de prueba que no pida UUID (toma el usuario de `subscriptions`) y cómo deshacerla.
+
 ## Permisos
 
 | Nivel | Acciones |
