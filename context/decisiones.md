@@ -67,3 +67,7 @@ El recuadro "Por qué" de la tarjeta lo escribía el motor de palabras clave aun
 Qué se descartó por ahora: que un modelo pequeño escriba una línea sobre el contenido real para el top del día. Cambia el prompt de IA y cuesta unos USD 0.03 al mes por usuario [Need to verify]. Se retoma si el recuadro vacío se extraña.
 
 Principio que deja: un score y su explicación salen siempre del mismo motor.
+
+## 2026-10-17 · Ícono propio: la marca "FF" del encabezado
+
+La app no tenía ícono propio (el manifest apuntaba a una imagen externa y `/favicon.ico` daba 404). No existía un logo aparte, así que el ícono sale de la marca "FF" del encabezado: tinta clara sobre #0a0a0a con sombra roja dura #dc2828, dibujada con rectángulos para no depender de fuentes. León lo aprobó al verlo en el iPhone.
