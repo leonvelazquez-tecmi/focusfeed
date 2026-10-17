@@ -55,7 +55,7 @@ def sembrar():
         ("mes-90", a, 30, 90),
         ("reciente-65", a, 1, 65),
         ("hoy-sin-score", b, 0, None),
-        ("semana-52", b, 7, 52),
+        ("semana-52", a, 7, 52),
     ]
     storage.batch_save_items([{
         "feed_id": feed, "guid": guid, "title": guid, "url": f"https://ejemplo.com/{guid}",
@@ -77,15 +77,16 @@ def main():
     print("\n1. Orden de 'Para ti' con decaimiento")
     orden = [i["guid"] for i in storage.fetch_items(LEON, tab="curated")["items"]]
     print(f"     {orden}")
-    # Sin calificar arranca en 40 (v5). Efectivos esperados: reciente-65 63,
-    # viejo-95 55, mes-90 50 (90 - 40 tope), hoy-sin-score 40, semana-52 38.
-    esperado = ["reciente-65", "viejo-95", "mes-90", "hoy-sin-score", "semana-52"]
+    # Sin calificar arranca en 40 (v5) y el castigo por antigüedad llega a 60 (v6).
+    # Efectivos: reciente-65 63, hoy-sin-score 40, semana-52 38,
+    # viejo-95 35 (95 - 60), mes-90 30 (90 - 60).
+    esperado = ["reciente-65", "hoy-sin-score", "semana-52", "viejo-95", "mes-90"]
     check("Lo que JEV aprobó (65 de ayer) le gana a lo de hoy sin calificar", orden[0] == "reciente-65")
-    check("Lo de hoy sin calificar le gana a un 52 ya calificado de hace una semana",
-          orden.index("hoy-sin-score") < orden.index("semana-52"))
+    check("Lo de hoy sin calificar le gana a un 95 de hace más de un año",
+          orden.index("hoy-sin-score") < orden.index("viejo-95"))
+    check("Lo de hoy sin calificar le gana a un 90 de hace un mes",
+          orden.index("hoy-sin-score") < orden.index("mes-90"))
     check("Un 65 de ayer le gana a un 95 de hace más de un año", orden.index("reciente-65") < orden.index("viejo-95"))
-    check("El castigo tiene tope: el 95 viejo sigue arriba del 52 de hace una semana",
-          orden.index("viejo-95") < orden.index("semana-52"))
     check("Orden completo", orden == esperado, f"esperado {esperado}")
 
     print("\n2. El score guardado no cambia")
