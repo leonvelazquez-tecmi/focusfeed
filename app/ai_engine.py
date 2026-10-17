@@ -302,12 +302,17 @@ def score_for_user(item: dict, profile: dict) -> dict:
     haystack = _normalize(
         f"{item.get('title','')} {item.get('author','')} "
         f"{item.get('summary_tldr') or item.get('raw_content','')} {' '.join(tags)}")
+    # Palabra completa, no subcadena: "gran" no cuenta dentro de "granular".
+    tokens = set(re.findall(r"\w+", haystack))
 
     score = 52
     matched = []
     for topic, words in keyword_map.items():
-        hits = sum(1 for w in words if w in haystack)
-        if hits >= 1:
+        hits = sum(1 for w in words if w in tokens)
+        # Una palabra suelta de un tema largo ("post" de "post-punk", "visual",
+        # "cultural") no basta para decir que el artículo trata del tema.
+        # Se piden dos palabras distintas, o todas si el tema tiene una sola.
+        if hits >= min(2, len(words)):
             matched.append(topic)
             score += min(hits * 12, 30)
 
@@ -434,11 +439,14 @@ def score_pending_for_user(user_id: str, limit: int = 40):
     pendientes = [i for i in data.get("items", []) if i.get("relevance_score") is None][:limit]
 
     def calificar(item):
-        result = score_for_user(item, profile)
+        # Un motor por item, nunca mezclados. Si JEV califica, el score es suyo y
+        # no hay "Por qué": la nota del motor de palabras clave no explica un
+        # score que ese motor no calculó. Si JEV no responde, el score y la nota
+        # salen juntos del motor de respaldo.
         jev_score = score_with_jev(item, profile, user_id)
         if jev_score is not None:
-            result["relevance_score"] = jev_score
-        return item["id"], result
+            return item["id"], {"relevance_score": jev_score, "curator_note": None}
+        return item["id"], score_for_user(item, profile)
 
     with ThreadPoolExecutor(8) as ex:
         resultados = list(ex.map(calificar, pendientes))

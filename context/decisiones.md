@@ -59,3 +59,11 @@ Condición previa y detalle: en el brief de pago voluntario v1.1, fuera del repo
 El proyecto de Supabase de FocusFeed está en la cuenta de Supabase personal de León (la de su Gmail), organización **Personal**. No está en las organizaciones Tecmilenio ni Tecmilenio Anual. Corrige lo que decía la entrada del 11-oct, que lo ubicaba en la cuenta institucional.
 
 Para qué sirve: cualquier migración o consulta SQL se corre en el dashboard de esa cuenta. Repo y Vercel siguen en la cuenta institucional.
+
+## 2026-10-17 · Sin "Por qué" cuando el score es de JEV
+
+El recuadro "Por qué" de la tarjeta lo escribía el motor de palabras clave aunque el score viniera de JEV, y a veces decía lo contrario del score. Se decidió no mostrar motivo cuando califica JEV: un motivo falso cuesta más confianza que ningún motivo.
+
+Qué se descartó por ahora: que un modelo pequeño escriba una línea sobre el contenido real para el top del día. Cambia el prompt de IA y cuesta unos USD 0.03 al mes por usuario [Need to verify]. Se retoma si el recuadro vacío se extraña.
+
+Principio que deja: un score y su explicación salen siempre del mismo motor.
