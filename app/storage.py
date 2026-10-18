@@ -51,10 +51,11 @@ def fetch_items(user_id: str, tab="curated", type_filter="all", limit=120):
             "p_user_id": user_id, "p_tab": tab,
             "p_type": type_filter, "p_limit": limit
         })
-        items = res if isinstance(res, list) else []
-        debug = get_supabase_debug_info()
         if not isinstance(res, list):
-            debug["items_query_error"] = res
+            # Antes se devolvía lista vacía con 200 y la interfaz mostraba "Todo al día".
+            raise RuntimeError(f"get_user_feed falló: {res}")
+        items = res
+        debug = get_supabase_debug_info()
 
         counts = {}
         counts_res = _rpc("get_user_counts", {"p_user_id": user_id})
