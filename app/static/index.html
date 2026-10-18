@@ -489,6 +489,14 @@ function paintCounts(c){
   $('#unread-pill').classList.toggle('hidden', currentTab==='sources'||currentTab==='reading'||!unread);
 }
 const ITEM_LIMIT=100;
+// Contadores con lista vacía no es "todo al día": es una respuesta rota. Los
+// contadores no miran el filtro de tipo, así que con un tipo elegido una lista
+// vacía es una respuesta honesta ("no hay podcasts"), no un error.
+function listaRota(data, tab, type){
+  if(tab==='sources' || type!=='all') return false;
+  const esperados=(data.counts||{})[tab==='reading'?'reading':'inbox']||0;
+  return !(data.items||[]).length && esperados>0;
+}
 async function loadItems(retried){
   const feed=$('#feed');
   pendingItems=null; $('#new-pill').classList.add('hidden');
@@ -497,9 +505,7 @@ async function loadItems(retried){
     const data=await api(`/api/items?tab=${currentTab}&type=${$('#filter-type').value}&limit=${ITEM_LIMIT}`);
     items=data.items||[];
     paintCounts(data.counts);
-    // Contadores con lista vacía no es "todo al día": es una respuesta rota.
-    const esperados=(data.counts||{})[currentTab==='reading'?'reading':'inbox']||0;
-    if(!items.length && esperados>0 && currentTab!=='sources'){
+    if(listaRota(data, currentTab, $('#filter-type').value)){
       if(!retried) return loadItems(true);
       throw new Error('La lista llegó vacía aunque hay contenido.');
     }
@@ -706,6 +712,16 @@ function render(animate){
   const feed=$('#feed');
   feed.classList.toggle('anim',!!animate);
   if(animate) setTimeout(()=>feed.classList.remove('anim'),1200);
+  const tipo=$('#filter-type').value;
+  if(!items.length && tipo!=='all' && currentTab!=='sources'){
+    renderTicker([]);
+    const que={video:'videos',article:'artículos',podcast:'podcasts'}[tipo]||'esa clase de contenido';
+    feed.innerHTML=`<div class="empty"><h3>Sin ${que} aquí</h3>
+      <p>Ninguna de tus fuentes trajo ${que} en esta pestaña.</p>
+      <button class="btn-wide accent" data-act="clear-type">Ver todo tipo</button></div>`;
+    rendered=[];
+    return;
+  }
   if(!items.length){
     renderTicker([]);
     feed.innerHTML=`<div class="empty"><h3>${currentTab==='reading'?'Nada guardado todavía':'Todo al día'}</h3>
@@ -940,6 +956,7 @@ document.addEventListener('click',async e=>{
   else if(act==='show-new') showNew();
   else if(act==='sync') syncAll();
   else if(act==='retry-items') loadItems();
+  else if(act==='clear-type'){ $('#filter-type').value='all'; loadItems(); }
   else if(act==='open-add') openModal('modal-add');
   else if(act==='open-learned'){ loadProfile(); openModal('modal-learned'); }
   else if(act==='close') closeModal(el.dataset.modal);
