@@ -488,18 +488,25 @@ function paintCounts(c){
   $('#unread-pill').textContent=unread;
   $('#unread-pill').classList.toggle('hidden', currentTab==='sources'||currentTab==='reading'||!unread);
 }
-async function loadItems(){
+const ITEM_LIMIT=100;
+async function loadItems(retried){
   const feed=$('#feed');
   pendingItems=null; $('#new-pill').classList.add('hidden');
   feed.innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   try{
-    const data=await api(`/api/items?tab=${currentTab}&type=${$('#filter-type').value}&limit=200`);
+    const data=await api(`/api/items?tab=${currentTab}&type=${$('#filter-type').value}&limit=${ITEM_LIMIT}`);
     items=data.items||[];
     paintCounts(data.counts);
+    // Contadores con lista vacía no es "todo al día": es una respuesta rota.
+    const esperados=(data.counts||{})[currentTab==='reading'?'reading':'inbox']||0;
+    if(!items.length && esperados>0 && currentTab!=='sources'){
+      if(!retried) return loadItems(true);
+      throw new Error('La lista llegó vacía aunque hay contenido.');
+    }
     render(true);
     if(enrichRounds<3 && items.some(i=>!i.summary_tldr)) enrich();
   }catch(e){
-    feed.innerHTML=`<div class="empty"><h3>No se pudo cargar</h3><p>${esc(e.message)}</p></div>`;
+    feed.innerHTML=`<div class="empty"><h3>No se pudo cargar</h3><p>${esc(e.message)}</p><button class="btn-wide accent" data-act="retry-items">Reintentar</button></div>`;
   }
 }
 // Ancla manual de scroll: Safari en iPhone no tiene overflow-anchor. Se toma la
@@ -528,7 +535,7 @@ function patchCard(n){
 async function refreshQuiet(){
   if(currentTab==='sources') return;
   try{
-    const data=await api(`/api/items?tab=${currentTab}&type=${$('#filter-type').value}&limit=200`);
+    const data=await api(`/api/items?tab=${currentTab}&type=${$('#filter-type').value}&limit=${ITEM_LIMIT}`);
     const fresh=data.items||[];
     paintCounts(data.counts);
     const byId=new Map(items.map(i=>[i.id,i]));
@@ -932,6 +939,7 @@ document.addEventListener('click',async e=>{
   else if(act==='markall') markAllRead();
   else if(act==='show-new') showNew();
   else if(act==='sync') syncAll();
+  else if(act==='retry-items') loadItems();
   else if(act==='open-add') openModal('modal-add');
   else if(act==='open-learned'){ loadProfile(); openModal('modal-learned'); }
   else if(act==='close') closeModal(el.dataset.modal);

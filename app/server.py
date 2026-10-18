@@ -209,6 +209,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
     def send_json_response(self, data, status=200):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Cache-Control', 'no-store')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Dev-User')
@@ -337,7 +338,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 self.send_json_response(fetch_items(user_id, tab=tab, type_filter=type_filter, limit=limit))
             except Exception as e:
-                self.send_json_response({"items": [], "counts": {}, "error": str(e)}, 200)
+                self.send_json_response({"status": "error", "message": f"No se pudo leer el feed: {e}"}, 502)
             return
 
         if path == "/api/feeds":
