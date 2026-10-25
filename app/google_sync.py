@@ -242,6 +242,7 @@ def finish_connect(code: str, state: str, redirect_uri: str) -> str:
         raise GoogleError("Esa es una cuenta corporativa. Conecta tu cuenta personal de Google: "
                           "el correo corporativo solo lo lee un agente autorizado.")
     storage.save_google_connection(user_id, tokens["refresh_token"], tokens.get("scope", ""))
+    storage.clear_google_expired(user_id)
     return user_id
 
 
@@ -257,6 +258,8 @@ def status(user_id: str) -> dict:
     return {
         "configured": configured(),
         "connected": bool(conn),
+        # Venció o lo revocaron: la interfaz pide reconectar en vez de callarse.
+        "expired": (not conn) and configured() and storage.google_expired(user_id),
         "last_scan_at": (conn or {}).get("last_scan_at"),
         "auto_sources": storage.count_auto_subscriptions(user_id),
         "max_auto_sources": max_auto_sources(),
@@ -509,6 +512,7 @@ def discover(user_id: str, budget_seconds: float = 40) -> dict:
         token = access_token(conn["refresh_token"])
     except ReconnectNeeded:
         storage.delete_google_connection(user_id)
+        storage.mark_google_expired(user_id)
         return {"status": "reconnect", "added": []}
     except GoogleError as e:
         return {"status": "error", "added": [], "errors": [str(e)]}
