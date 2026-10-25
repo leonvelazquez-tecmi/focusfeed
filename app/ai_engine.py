@@ -324,6 +324,14 @@ def score_for_user(item: dict, profile: dict) -> dict:
             reasons.append(f"fuente que sueles calificar bien ({author})")
             break
 
+    # Abrir una tarjeta suma poco por clic (3) y con tope (9), mucho menos que
+    # el corazón (15 fijos).
+    abiertos = learned.get("clicked_authors") or {}
+    for nombre, veces in abiertos.items():
+        if nombre and nombre.lower() in author.lower():
+            score += min(int(veces) * CLICK_AUTHOR_POINTS, CLICK_AUTHOR_CAP)
+            break
+
     for tag, weight in (learned.get("boosted_tags") or {}).items():
         if tag in tags or tag in matched:
             score += min(int(weight) * 5, 20)
@@ -344,7 +352,14 @@ def score_for_user(item: dict, profile: dict) -> dict:
 def _jev_question(profile: dict) -> dict:
     topics = "; ".join(profile.get("focus_topics", []))
     learned = profile.get("learned_preferences", {}) or {}
-    gusta = ", ".join(list(learned.get("boosted_authors", []))[:8])
+    gusta_lista = list(learned.get("boosted_authors", []))
+    # Quien abres seguido (3 clics o más) también cuenta como "suele calificar bien",
+    # después de los que calificaste con corazón.
+    for nombre, veces in sorted((learned.get("clicked_authors") or {}).items(),
+                                key=lambda kv: -int(kv[1])):
+        if int(veces) >= CLICK_AUTHOR_MIN_FOR_PROMPT and nombre not in gusta_lista:
+            gusta_lista.append(nombre)
+    gusta = ", ".join(gusta_lista[:8])
     evita = ", ".join(list((learned.get("penalized_tags") or {}))[:8])
     extra = ""
     if gusta:
@@ -468,6 +483,17 @@ def score_pending_for_user(user_id: str, limit: int = 40):
 # Qué le pasa al item en el feed según cómo lo califiques.
 # El corazón guarda automático; el pulgar abajo lo saca del feed de verdad.
 # 'like' es una señal más suave: entrena preferencias sin mover el item.
+# Pesos de las señales, de más fuerte a más débil (positivas):
+#   corazón: tags +2 y autor fijo (+15 al puntuar)
+#   relevante (like): tags +1 y autor fijo
+#   clic en la tarjeta: tags +1 y un contador por autor (+3 por clic, tope +9)
+#   nada: 0
+# El pulgar abajo penaliza tags con 2 por tag y no depende de los clics.
+CLICK_TAG_WEIGHT = 1
+CLICK_AUTHOR_POINTS = 3
+CLICK_AUTHOR_CAP = 9
+CLICK_AUTHOR_MIN_FOR_PROMPT = 3
+
 RATING_TO_STATUS = {
     "love": "reading",
     "dislike": "archived",
@@ -479,6 +505,14 @@ def record_feedback(user_id: str, item_id: int, rating: str, comment: str = ""):
     from app.storage import (save_user_feedback, get_item_by_id,
                              update_learned_preferences, fetch_profile,
                              set_item_status)
+
+    if rating == "click":
+        # El clic es la señal más débil: cuenta una sola vez por tarjeta y nunca
+        # pisa una calificación explícita (corazón, relevante o pulgar abajo).
+        from app.storage import get_user_item
+        previo = (get_user_item(user_id, item_id) or {}).get("user_rating") or "none"
+        if previo != "none":
+            return
 
     save_user_feedback(user_id, item_id, rating, comment)
 
@@ -495,6 +529,7 @@ def record_feedback(user_id: str, item_id: int, rating: str, comment: str = ""):
     boosted_authors = set(learned.get("boosted_authors", []))
     boosted_tags = dict(learned.get("boosted_tags", {}))
     penalized_tags = dict(learned.get("penalized_tags", {}))
+    clicked_authors = dict(learned.get("clicked_authors", {}))
 
     try:
         raw_tags = item.get("topic_tags")
@@ -512,6 +547,13 @@ def record_feedback(user_id: str, item_id: int, rating: str, comment: str = ""):
             boosted_tags[t] = boosted_tags.get(t, 0) + weight
             if t in penalized_tags:
                 penalized_tags[t] = max(0, penalized_tags[t] - 1)
+    elif rating == "click":
+        if author:
+            clicked_authors[author] = int(clicked_authors.get(author, 0)) + 1
+        for t in tags:
+            boosted_tags[t] = boosted_tags.get(t, 0) + CLICK_TAG_WEIGHT
+            if t in penalized_tags:
+                penalized_tags[t] = max(0, penalized_tags[t] - 1)
     elif rating == "dislike":
         boosted_authors.discard(author)
         for t in tags:
@@ -523,4 +565,5 @@ def record_feedback(user_id: str, item_id: int, rating: str, comment: str = ""):
         "boosted_authors": list(boosted_authors),
         "boosted_tags": boosted_tags,
         "penalized_tags": penalized_tags,
+        "clicked_authors": clicked_authors,
     })
