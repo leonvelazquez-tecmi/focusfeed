@@ -154,7 +154,7 @@ def main():
     record_feedback(ANA, para_love, "love")
     guardados = {i["id"] for i in storage.fetch_items(ANA, tab="reading")["items"]}
     check("El corazón guarda automático", para_love in guardados)
-    check("Y el item sigue visible en el feed", para_love in
+    check("Y sale de Para ti: lo guardado vive solo en Guardados", para_love not in
           {i["id"] for i in storage.fetch_items(ANA)["items"]})
 
     otro = feed_ana[2]["id"]

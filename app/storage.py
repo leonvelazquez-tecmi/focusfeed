@@ -26,16 +26,20 @@ def _rpc(name: str, params: dict):
 # Feed de lectura
 # ==========================================================
 
+DIVERSIFY_WINDOW = 4
+
+
 def diversify_by_feed(items: list) -> list:
     """Evita rachas del mismo canal. Greedy: respeta el orden de entrada
-    (score o fecha) pero nunca pone dos items seguidos de la misma fuente
-    mientras exista alternativa."""
+    (score o fecha) pero no pone dos items seguidos de la misma fuente si hay
+    alternativa entre los siguientes DIVERSIFY_WINDOW. Sin ese tope, una fuente
+    dominante hacía saltar items de meses atrás por encima de los recientes."""
     remaining = list(items)
     out = []
     last_feed = None
     while remaining:
         idx = 0
-        for i, it in enumerate(remaining):
+        for i, it in enumerate(remaining[:DIVERSIFY_WINDOW]):
             if it.get("feed_id") != last_feed:
                 idx = i
                 break
@@ -83,7 +87,8 @@ def fetch_items(user_id: str, tab="curated", type_filter="all", limit=120):
         params = [user_id, user_id]
 
         if tab == "curated":
-            base += " AND COALESCE(ui.status,'inbox') != 'archived'"
+            # Lo guardado vive solo en Guardados (v8).
+            base += " AND COALESCE(ui.status,'inbox') NOT IN ('archived','reading')"
         elif tab == "inbox":
             base += " AND COALESCE(ui.status,'inbox') = 'inbox'"
         elif tab == "reading":
@@ -96,15 +101,19 @@ def fetch_items(user_id: str, tab="curated", type_filter="all", limit=120):
             params.append(type_filter)
 
         if tab == "curated":
-            # Espejo de supabase_migration_v4_feed_recency.sql: el score de JEV
-            # no cambia, pero pierde 2 puntos por día de antigüedad, tope 60.
-            # SQLite no entiende fechas RFC 822 (pubDate crudo de RSS): esas
-            # quedan sin castigo en local. En Postgres sí se parsean.
-            base += """
-             ORDER BY COALESCE(ui.relevance_score, 20)
-                      - MIN(60.0, 2.0 * MAX(0.0,
-                          julianday('now') - COALESCE(julianday(i.published_at), julianday('now'))))
-                      DESC,
+            # Espejo de supabase_migration_v8_tiers_y_guardados.sql. La antigüedad
+            # manda por escalones (hasta 7 días, hasta 30, más viejo): un item de
+            # un escalón más viejo nunca va antes que uno de un escalón más
+            # nuevo, sin importar su score. Dentro de los dos primeros escalones
+            # el score de JEV pierde 2 puntos por día; en el más viejo (o sin
+            # fecha legible) el orden es solo por fecha. SQLite no entiende
+            # fechas RFC 822 (pubDate crudo de RSS): en local caen al escalón viejo.
+            edad = "(julianday('now') - julianday(i.published_at))"
+            escalon = f"CASE WHEN {edad} IS NULL THEN 2 WHEN {edad} <= 7 THEN 0 WHEN {edad} <= 30 THEN 1 ELSE 2 END"
+            base += f"""
+             ORDER BY {escalon} ASC,
+                      CASE WHEN ({escalon}) < 2
+                           THEN COALESCE(ui.relevance_score, 20) - 2.0 * MAX(0.0, {edad}) END DESC,
                       i.published_at DESC"""
         else:
             base += " ORDER BY i.published_at DESC"
