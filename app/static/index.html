@@ -895,6 +895,23 @@ function markSaveButton(id,saved){
   btn.textContent = saved ? 'Guardado' : 'Guardar';
   btn.classList.toggle('on',saved);
 }
+// Abrir una tarjeta (título o imagen) es una señal de interés más débil que el
+// corazón. Se manda una sola vez por tarjeta y no pisa una calificación previa.
+function noteOpen(e){
+  const a=e.target.closest&&e.target.closest('.card a[href]');
+  if(!a) return;
+  const card=a.closest('.card'); if(!card) return;
+  const it=items.find(i=>i.id===Number(card.dataset.id));
+  if(!it || (it.user_rating && it.user_rating!=='none')) return;
+  it.user_rating='click';
+  try{
+    fetch('/api/items/'+it.id+'/feedback',{method:'POST',keepalive:true,
+      headers:Object.assign({'Content-Type':'application/json'},(DEV_USER?{'X-Dev-User':DEV_USER}:{})),
+      body:JSON.stringify({rating:'click'})}).catch(()=>{});
+  }catch(err){}
+}
+document.addEventListener('click',noteOpen);
+document.addEventListener('auxclick',noteOpen);
 async function rate(id,rating){
   const it=items.find(i=>i.id===id);
   try{
@@ -947,7 +964,7 @@ async function markAllRead(){
 function openFeedback(id){
   const it=items.find(i=>i.id===id); if(!it) return;
   fbItemId=id; $('#fb-title').textContent=it.title;
-  setRate(it.user_rating&&it.user_rating!=='none'?it.user_rating:'love');
+  setRate(it.user_rating&&!['none','click'].includes(it.user_rating)?it.user_rating:'love');
   $('#fb-comment').value=it.user_feedback_comment||'';
   openModal('modal-feedback');
 }
