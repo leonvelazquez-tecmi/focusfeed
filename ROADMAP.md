@@ -53,6 +53,15 @@ Bloqueado por trabajo humano:
 
 Cuando eso exista, falta escribir: pantalla de acceso en `index.html`, envío del token en cada llamada, y **eliminar el respaldo `OWNER FALLBACK` de `app/auth.py`**, que hoy deja pasar cualquier request sin token como si fuera el dueño.
 
+**T8. Fuentes que se agregan solas.** Código y pruebas listos el 24-oct en la rama `feat/fuentes-automaticas`.
+- Una conexión de Google (solo lectura) trae las suscripciones de YouTube y las newsletters de Gmail personal (`app/google_sync.py`). Con RSS entran como suscripción normal; sin RSS (LinkedIn y similares) entran como fuente privada de correo, visible solo para su dueño. El auto-descubrimiento de RSS (Medium, `<link rel="alternate">`, rutas típicas) vive en `app/ingestion.py`.
+- Buzón corporativo: lo lee un agente autorizado de la organización, que resume y deja un archivo; un script local lo envía a `POST /api/ingest/outlook` (`app/outlook_ingest.py`). Del correo solo cruza lo ya resumido y nunca se manda a un modelo externo (guid `outlook:`).
+- Datos: `supabase_migration_v5_fuentes_automaticas.sql` (`owner_user_id` en `feeds` e `items`, `subscriptions.origin`, `dismissed_sources`, `google_connections`). Ojo con el PR de RLS (`supabase_migration_v4_rls.sql`): su política de lectura sobre `feeds` e `items` debe conservar la regla `owner_user_id IS NULL OR owner_user_id = auth.uid()`, o las fuentes privadas quedarían visibles para cualquier cuenta con sesión.
+- Pruebas en verde: `tests/test_google_sync.py`, `tests/test_outlook_ingest.py`, `tests/test_discover_rss.py` y las anteriores. Verificado de extremo a extremo (script a endpoint) y en pantalla a 375 y 1280 px, claro y oscuro.
+- Decisión de costo (negocio): tope `MAX_AUTO_SOURCES` = 100 fuentes detectadas por persona y 20 items de correo analizados con IA por corrida. Lo del buzón corporativo nunca llama a un modelo.
+- Pendiente humano: variables `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FOCUSFEED_ADMIN_KEY` y `FOCUSFEED_INGEST_KEY` en Vercel, migración v5 en Supabase antes del deploy, y el deploy. Sin `FOCUSFEED_ADMIN_KEY` nadie puede conectar Google en producción (falla cerrado).
+- No se puede, y la interfaz lo dice: seguir el feed de publicaciones de LinkedIn ni las personas que se siguen en Medium. Solo llegan sus newsletters por correo.
+
 ## Cola, en este orden
 
 1. **T3. IA que sí corre, con presupuesto.** Medio hecho.

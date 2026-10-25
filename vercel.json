@@ -1,6 +1,9 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index.py" }
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.py"
+    }
   ],
   "functions": {
     "api/index.py": {
@@ -8,6 +11,13 @@
     }
   },
   "crons": [
-    { "path": "/api/cron/sync", "schedule": "0 13 * * *" }
+    {
+      "path": "/api/cron/discover",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/sync",
+      "schedule": "0 13 * * *"
+    }
   ]
 }

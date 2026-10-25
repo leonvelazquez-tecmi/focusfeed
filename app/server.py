@@ -12,9 +12,11 @@ import concurrent.futures
 
 from app.db import init_db, is_supabase
 from app.auth import resolve_user
+from app import google_sync, outlook_ingest
 from app.storage import (
     fetch_items, set_item_status, bulk_set_status,
-    fetch_feeds, fetch_all_active_feeds, create_or_update_feed, unsubscribe,
+    fetch_feeds, fetch_all_active_feeds, create_or_update_feed, unsubscribe, forget_feed,
+    get_feed_by_id, dismiss_source, get_google_connection,
     fetch_profile, save_profile_data, batch_save_items,
     ensure_seed_if_empty, get_pending_item_ids, usage_summary, save_feed_cache,
     get_existing_guids, items_missing_image, save_item_thumbnail, NO_IMAGE
@@ -192,6 +194,7 @@ def sync_feeds(feeds: list, timeout: float = 12, force: bool = False) -> int:
     """Descarga feeds en paralelo, guarda los items nuevos y la caché HTTP de
     cada feed. Salta los sincronizados hace menos de 15 min salvo force.
     Devuelve cuántos items nuevos entraron al corpus."""
+    feeds = [f for f in feeds if f.get("feed_type") != "email"]  # su contenido entra por google_sync / outlook_ingest
     if not force:
         feeds = [f for f in feeds if not is_fresh(f)]
     batches = run_parallel(fetch_feed_and_parse, feeds, workers=16, timeout=timeout)
@@ -205,13 +208,37 @@ def sync_feeds(feeds: list, timeout: float = 12, force: bool = False) -> int:
     return batch_save_items(new_items) if new_items else 0
 
 
+def admin_ok(headers) -> bool:
+    """Prueba de dueño para conectar o desconectar Google. La app aún no tiene
+    login (todo cae en el dueño), así que sin esta llave cualquiera que abra la
+    página podría reemplazar la conexión. En producción falla cerrado: sin
+    FOCUSFEED_ADMIN_KEY configurada nadie conecta. En local sin llave sí se puede."""
+    import hmac
+    expected = os.environ.get("FOCUSFEED_ADMIN_KEY", "")
+    if not expected:
+        return not is_supabase()
+    return hmac.compare_digest(headers.get("X-Admin-Key", "") or "", expected)
+
+
+def base_url(headers) -> str:
+    configured = os.environ.get("FOCUSFEED_BASE_URL", "").rstrip("/")
+    if configured:
+        return configured
+    host = headers.get("X-Forwarded-Host") or headers.get("Host") or f"localhost:{PORT}"
+    proto = headers.get("X-Forwarded-Proto") or ("http" if host.startswith(("localhost", "127.")) else "https")
+    return f"{proto}://{host}"
+
+
+DISCOVER_MIN_SECONDS = 15 * 60  # la detección al abrir la app no corre más seguido que esto
+
+
 class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
     def send_json_response(self, data, status=200):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Dev-User')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Dev-User, X-Admin-Key')
         self.end_headers()
         self.wfile.write(json.dumps(data, ensure_ascii=False, default=str).encode('utf-8'))
 
@@ -222,7 +249,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(204)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Dev-User')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Dev-User, X-Admin-Key')
         self.end_headers()
 
     # ------------------------------------------------------
@@ -309,6 +336,44 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return
 
+        if path == "/api/google/status":
+            try:
+                self.send_json_response({**google_sync.status(self.current_user()),
+                                         "admin_required": bool(os.environ.get("FOCUSFEED_ADMIN_KEY")) or is_supabase()})
+            except Exception as e:
+                self.send_json_response({"configured": False, "connected": False, "error": str(e)})
+            return
+
+        if path == "/api/google/callback":
+            redirect_uri = base_url(self.headers) + "/api/google/callback"
+            if query.get("error"):
+                msg = urllib.parse.quote("Google no autorizó la conexión.")
+                dest = f"/?google=error&msg={msg}"
+            else:
+                try:
+                    google_sync.finish_connect(query.get("code", [""])[0], query.get("state", [""])[0], redirect_uri)
+                    dest = "/?google=ok"
+                except Exception as e:
+                    dest = "/?google=error&msg=" + urllib.parse.quote(str(e)[:200])
+            self.send_response(302)
+            self.send_header("Location", dest)
+            self.end_headers()
+            return
+
+        # Detección diaria de suscripciones nuevas (YouTube y Gmail) de cada persona
+        # con Google conectado. Va aparte del sync para no gastar su presupuesto de 45 s.
+        if path == "/api/cron/discover":
+            cron_secret = os.environ.get("CRON_SECRET")
+            if cron_secret:
+                if self.headers.get("Authorization", "") != f"Bearer {cron_secret}":
+                    self.send_json_response({"status": "error", "message": "No autorizado"}, 401)
+                    return
+            try:
+                self.send_json_response({"status": "success", "results": google_sync.discover_all()})
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
+            return
+
         if path == "/api/items":
             user_id = self.current_user()
             tab = query.get("tab", ["curated"])[0]
@@ -360,6 +425,72 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
             body = json.loads(body_str) if body_str else {}
         except Exception:
             body = {}
+
+        if path == "/api/google/connect":
+            if not admin_ok(self.headers):
+                self.send_json_response({"status": "error", "message": "Falta la llave de dueño."}, 403)
+                return
+            try:
+                url = google_sync.auth_url(user_id, base_url(self.headers) + "/api/google/callback")
+                self.send_json_response({"status": "success", "url": url})
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 400)
+            return
+
+        if path == "/api/google/disconnect":
+            if not admin_ok(self.headers):
+                self.send_json_response({"status": "error", "message": "Falta la llave de dueño."}, 403)
+                return
+            try:
+                google_sync.disconnect(user_id)
+                self.send_json_response({"status": "success"})
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
+            return
+
+        if path == "/api/google/discover":
+            try:
+                conn = get_google_connection(user_id)
+                last = (conn or {}).get("last_scan_at")
+                if conn and last and not body.get("force"):
+                    try:
+                        dt = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        if (datetime.now(timezone.utc) - dt).total_seconds() < DISCOVER_MIN_SECONDS:
+                            self.send_json_response({"status": "skipped", "added": []})
+                            return
+                    except ValueError:
+                        pass
+                self.send_json_response(google_sync.discover(user_id))
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e), "added": []}, 500)
+            return
+
+        # Newsletters del buzón corporativo, resumidas por un agente autorizado y enviadas por
+        # el puente local. Autenticado con una llave propia, no con la de la app.
+        if path == "/api/ingest/outlook":
+            if not outlook_ingest.ingest_key_ok(self.headers):
+                self.send_json_response({"status": "error", "message": "No autorizado"}, 401)
+                return
+            try:
+                self.send_json_response(outlook_ingest.ingest(
+                    user_id, str(body.get("corrida", "")), body.get("registros", [])))
+            except outlook_ingest.IngestError as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 400)
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
+            return
+
+        match_dismiss = re.match(r"^/api/feeds/(\d+)/dismiss$", path)
+        if match_dismiss:
+            try:
+                feed_id = int(match_dismiss.group(1))
+                forget_feed(user_id, feed_id, dismiss=True)
+                self.send_json_response({"status": "success"})
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
+            return
 
         match_feedback = re.match(r"^/api/items/(\d+)/feedback$", path)
         if match_feedback:
@@ -532,7 +663,7 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
         match_feed = re.match(r"^/api/feeds/(\d+)$", path)
         if match_feed:
             try:
-                unsubscribe(self.current_user(), int(match_feed.group(1)))
+                forget_feed(self.current_user(), int(match_feed.group(1)))
                 self.send_json_response({"status": "success"})
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
