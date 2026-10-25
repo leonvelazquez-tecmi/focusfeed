@@ -267,6 +267,16 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(f.read())
             return
 
+        if path in ("/privacidad", "/privacidad.html"):
+            with open(os.path.join(STATIC_DIR, "privacidad.html"), "rb") as f:
+                body = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == "/manifest.json":
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacidad · FocusFeed</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<style>
+  :root{--bg:#f4f1ea;--ink:#111;--mut:#555;--acc:#d62828}
+  @media (prefers-color-scheme:dark){:root{--bg:#111;--ink:#f1eee6;--mut:#aaa;--acc:#ff5a5a}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 "Archivo Narrow",system-ui,sans-serif}
+  main{max-width:680px;margin:0 auto;padding:32px 16px 64px}
+  h1{font-size:34px;line-height:1.1;margin:0 0 8px;text-transform:uppercase}
+  h2{font-size:20px;margin:32px 0 8px;text-transform:uppercase;border-top:3px solid var(--ink);padding-top:12px}
+  p,li{margin:0 0 10px}
+  .mut{color:var(--mut)}
+  a{color:var(--acc)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacidad de FocusFeed</h1>
+  <p class="mut">Última actualización: 25 de octubre de 2026</p>
+
+  <p>FocusFeed es una aplicación personal que reúne los canales, blogs y newsletters que sigues y deja en tu feed lo que vale la pena. Esta página explica qué datos de Google lee y qué hace con ellos.</p>
+
+  <h2>Qué lee de tu cuenta de Google</h2>
+  <ul>
+    <li><b>YouTube (solo lectura):</b> la lista de canales a los que estás suscrito, para agregarlos como fuentes.</li>
+    <li><b>Gmail (solo lectura):</b> únicamente mensajes de envíos masivos tipo newsletter, identificados por sus cabeceras de lista (<code>List-Id</code>, <code>List-Unsubscribe</code>). De ellos toma remitente, asunto y fecha. Cuando una newsletter no tiene RSS, también guarda su contenido para mostrártelo en el feed.</li>
+  </ul>
+  <p>No lee tus correos personales, no envía, no responde, no borra ni modifica nada en tu cuenta.</p>
+
+  <h2>Qué hace con esos datos</h2>
+  <ul>
+    <li>Agregar tus suscripciones y newsletters como fuentes de tu propio feed.</li>
+    <li>Resumir y ordenar el contenido de esas newsletters con modelos de inteligencia artificial (Gemini y OpenRouter). Solo se envía el texto de la newsletter, nunca tus correos personales.</li>
+    <li>No se venden, no se comparten con terceros y no se usan para publicidad.</li>
+  </ul>
+
+  <h2>Dónde se guardan y por cuánto tiempo</h2>
+  <ul>
+    <li>Se guardan en una base de datos propia (Supabase) con acceso restringido a la aplicación.</li>
+    <li>El contenido de correos de newsletters se borra a los 30 días; queda solo el título, el enlace y el resumen.</li>
+    <li>El permiso de acceso a Google se guarda para poder revisar tus suscripciones cada día, hasta que lo desconectes.</li>
+  </ul>
+
+  <h2>Cómo retirar el acceso</h2>
+  <ul>
+    <li>En la aplicación: Fuentes, Google, <b>Desconectar</b>. Se revoca el permiso y se borra el que FocusFeed tenía guardado.</li>
+    <li>Desde Google: <a href="https://myaccount.google.com/permissions" rel="noopener">myaccount.google.com/permissions</a>.</li>
+    <li>Para borrar los datos que ya están guardados, escribe al correo de contacto.</li>
+  </ul>
+
+  <h2>Política de datos de Google</h2>
+  <p>El uso que FocusFeed hace de la información recibida de las API de Google cumple con la <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Política de datos de usuario de los servicios de API de Google</a>, incluidos sus requisitos de uso limitado.</p>
+
+  <h2>Contacto</h2>
+  <p>León Velázquez · <a href="mailto:leonvelazquez@gmail.com">leonvelazquez@gmail.com</a></p>
+  <p><a href="/">Volver a FocusFeed</a></p>
+</main>
+</body>
+</html>

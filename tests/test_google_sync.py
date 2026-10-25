@@ -223,7 +223,14 @@ def main():
     r6 = gs.discover(ANA)
     check("Pide reconectar", r6["status"] == "reconnect", r6["status"])
     check("Y borra la conexión caducada", storage.get_google_connection(ANA) is None)
+    st = gs.status(ANA)
+    check("El estado dice que venció, para avisarlo en pantalla", st["expired"] and not st["connected"], str(st))
+    check("Quien nunca conectó no ve el aviso de vencido", not gs.status(BRUNO)["expired"])
     STATE["invalid_grant"] = False
+    storage.save_google_connection(ANA, "refresh-ana-2", "scope")
+    storage.clear_google_expired(ANA)
+    st = gs.status(ANA)
+    check("Al reconectar el aviso desaparece", st["connected"] and not st["expired"], str(st))
 
     print("\n9. Retención de correo")
     storage.purge_email_bodies(0)

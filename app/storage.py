@@ -669,6 +669,43 @@ def get_feed_by_id(feed_id: int):
     return dict(row) if row else None
 
 
+GOOGLE_EXPIRED_KEY = "google:expired"
+
+
+def mark_google_expired(user_id: str):
+    """Deja constancia de que el permiso de Google venció, para avisarlo en
+    pantalla en vez de que la detección se apague en silencio. Reusa
+    dismissed_sources con una llave fija: sin migración."""
+    if is_supabase():
+        supabase_request(
+            "dismissed_sources?on_conflict=user_id,source_key", method="POST",
+            data={"user_id": user_id, "source_key": GOOGLE_EXPIRED_KEY},
+            headers_extra={"Prefer": "resolution=ignore-duplicates,return=minimal"})
+        return
+    conn = get_db_connection()
+    conn.execute("INSERT OR IGNORE INTO dismissed_sources (user_id, source_key) VALUES (?, ?)",
+                 (user_id, GOOGLE_EXPIRED_KEY))
+    conn.commit()
+    conn.close()
+
+
+def clear_google_expired(user_id: str):
+    if is_supabase():
+        supabase_request(
+            f"dismissed_sources?user_id=eq.{user_id}&source_key=eq.{GOOGLE_EXPIRED_KEY}",
+            method="DELETE", headers_extra={"Prefer": "return=minimal"})
+        return
+    conn = get_db_connection()
+    conn.execute("DELETE FROM dismissed_sources WHERE user_id = ? AND source_key = ?",
+                 (user_id, GOOGLE_EXPIRED_KEY))
+    conn.commit()
+    conn.close()
+
+
+def google_expired(user_id: str) -> bool:
+    return GOOGLE_EXPIRED_KEY in list_dismissed(user_id)
+
+
 def forget_feed(user_id: str, feed_id: int, dismiss: bool = False):
     """Quita la suscripción. Si no era manual (o se pide con dismiss), también
     recuerda la fuente para que la detección automática no la vuelva a agregar."""

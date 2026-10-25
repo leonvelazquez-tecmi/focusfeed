@@ -493,11 +493,17 @@ async function api(path,opts){
 
 const ADMIN_KEY_STORE='ff-admin-key';
 function adminHeaders(){ try{ const k=localStorage.getItem(ADMIN_KEY_STORE); return k?{'X-Admin-Key':k}:{}; }catch(e){ return {}; } }
+let avisoGoogleVisto=false;
 async function loadGoogle(){
   try{ google=await api('/api/google/status'); }catch(e){ google={configured:false,connected:false}; }
+  if(google.expired && !avisoGoogleVisto){
+    avisoGoogleVisto=true;
+    toast('Tu conexión con Google venció. Reconéctala en Fuentes.');
+  }
 }
 function googleBoxHTML(){
   if(!google.configured) return '';
+  if(!google.connected && google.expired) return `<div class="gbox"><h4>Tu conexión con Google venció</h4><p>FocusFeed dejó de buscar suscripciones nuevas. Reconecta Google para que vuelva a enterarse solo; lo que ya se agregó se queda.</p><button class="btn-wide accent" data-act="open-google">Reconectar Google</button></div>`;
   if(!google.connected) return `<div class="gbox"><h4>Detección automática</h4><p>Conecta tu Google y FocusFeed se entera solo cuando te suscribes en YouTube o te llega una newsletter nueva.</p><button class="btn-wide accent" data-act="open-google">Conectar Google</button></div>`;
   const last=google.last_scan_at?relTime(google.last_scan_at):'';
   const cuando=!last?'sin revisar todavía':(last==='ahora'?'ahora mismo':'hace '+last);
@@ -505,7 +511,7 @@ function googleBoxHTML(){
 }
 async function discoverNow(force){
   const d=await api('/api/google/discover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({force:!!force})});
-  if(d.status==='reconnect'){ google.connected=false; toast('Vuelve a conectar Google: el permiso caducó.'); return d; }
+  if(d.status==='reconnect'){ google.connected=false; google.expired=true; avisoGoogleVisto=true; toast('Vuelve a conectar Google: el permiso caducó.'); if(currentTab==='sources') renderSources(); return d; }
   if(d.status==='account_not_allowed'){ google.connected=false; toast('Esa es una cuenta corporativa. Conecta una cuenta personal.'); return d; }
   const added=d.added||[];
   if(added.length){
