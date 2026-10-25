@@ -1,5 +1,6 @@
 import xml.etree.ElementTree as ET
 import urllib.request
+import urllib.parse
 import re
 import json
 import warnings
@@ -84,10 +85,90 @@ def resolve_feed_url(raw_url: str) -> tuple[str, str, str]:
     if "substack.com" in raw_url:
         feed_type = "substack"
         if not raw_url.endswith("/feed"):
-            clean_url = raw_url.rstrip("/")
-            return f"{clean_url}/feed", feed_type, suggested_title
+            # El feed está en la raíz de la publicación, aunque la URL sea de un post.
+            parsed = urllib.parse.urlparse(raw_url if "://" in raw_url else "https://" + raw_url)
+            return f"{parsed.scheme}://{parsed.netloc}/feed", feed_type, suggested_title
+
+    # Cualquier otro sitio: si la URL no es el feed, se busca. Si no se encuentra
+    # nada se devuelve la URL tal cual, como antes.
+    if feed_type == "rss":
+        found = discover_rss(raw_url)
+        if found:
+            return found, feed_type, suggested_title
 
     return raw_url, feed_type, suggested_title
+
+
+FEED_PROBES = ("/feed", "/rss", "/feed.xml", "/rss.xml", "/atom.xml", "/index.xml")
+
+
+def _http_get(url: str, timeout: float = 5, max_bytes: int = 400_000) -> str:
+    """Texto de la respuesta o '' si falla. Tope de bytes: solo se busca un
+    <link> en la cabecera o el arranque de un feed."""
+    try:
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read(max_bytes).decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
+def looks_like_feed(text: str) -> bool:
+    head = (text or "").lstrip()[:600].lower()
+    return "<rss" in head or "<feed" in head or "<rdf:rdf" in head
+
+
+def medium_feed_url(url: str):
+    """Medium publica RSS por autor, publicación y subdominio, pero no lo
+    anuncia en el HTML de forma confiable."""
+    parsed = urllib.parse.urlparse(url if "://" in url else "https://" + url)
+    host = parsed.netloc.lower().split(":")[0]
+    parts = [p for p in parsed.path.split("/") if p]
+    if host == "medium.com" or host == "www.medium.com":
+        if parts and parts[0] == "feed":
+            return f"https://medium.com{parsed.path}"
+        if parts and parts[0].startswith("@"):
+            return f"https://medium.com/feed/{parts[0]}"
+        if parts and parts[0] not in ("tag", "topics", "m", "me", "plans", "search"):
+            return f"https://medium.com/feed/{parts[0]}"
+        return None
+    if host.endswith(".medium.com") and host != "www.medium.com":
+        return f"https://{host}/feed"
+    return None
+
+
+def discover_rss(site_url: str, fetch=_http_get):
+    """URL del feed de un sitio o None. Orden: Medium, la propia URL si ya es un
+    feed, <link rel="alternate"> de la página, y rutas típicas (/feed, /rss...).
+    `fetch` se inyecta para probar sin red."""
+    url = (site_url or "").strip()
+    if not url or url.startswith("email:"):
+        return None
+    if "://" not in url:
+        url = "https://" + url
+
+    medium = medium_feed_url(url)
+    if medium:
+        return medium
+
+    html = fetch(url)
+    if looks_like_feed(html):
+        return url
+    if html:
+        soup = BeautifulSoup(html, "html.parser")
+        for link in soup.find_all("link", href=True):
+            rel = " ".join(link.get("rel") or []).lower()
+            kind = (link.get("type") or "").lower()
+            if "alternate" in rel and ("rss" in kind or "atom" in kind):
+                return urllib.parse.urljoin(url, link["href"])
+
+    parsed = urllib.parse.urlparse(url)
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    for probe in FEED_PROBES:
+        candidate = base + probe
+        if looks_like_feed(fetch(candidate)):
+            return candidate
+    return None
 
 def _first(el, *paths):
     """Primer subelemento que exista. Compara contra None a propósito: un
@@ -347,15 +428,16 @@ def save_items_to_db(items: list):
             INSERT OR IGNORE INTO items (
                 feed_id, guid, title, url, author, published_at,
                 content_type, video_id, thumbnail_url, raw_content, transcript,
-                summary_tldr, key_takeaways, topic_tags
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                summary_tldr, key_takeaways, topic_tags, owner_user_id, ai_processed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 item["feed_id"], item["guid"], item["title"], item["url"],
                 item.get("author", "Autor"), item["published_at"], item["content_type"],
                 item.get("video_id"), item.get("thumbnail_url", ""),
                 item.get("raw_content", ""), item.get("transcript", ""),
                 item.get("summary_tldr", ""), item.get("key_takeaways", "[]"),
-                item.get("topic_tags", "[]")
+                item.get("topic_tags", "[]"),
+                item.get("owner_user_id"), 1 if item.get("ai_processed") else 0
             ))
             if cursor.rowcount > 0:
                 inserted_count += 1

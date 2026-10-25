@@ -363,6 +363,12 @@ def _jev_question(profile: dict) -> dict:
     }}
 
 
+def is_outlook_item(item: dict) -> bool:
+    """Items que entraron desde el buzón corporativo (guid 'outlook:...').
+    Ninguna función de este módulo puede mandarlos a Gemini ni a JEV."""
+    return str((item or {}).get("guid") or "").startswith("outlook:")
+
+
 def score_with_jev(item: dict, profile: dict, user_id=None):
     """Score personal 0 a 100 con JEV, o None si no hay llave o falla.
 
@@ -371,6 +377,8 @@ def score_with_jev(item: dict, profile: dict, user_id=None):
     """
     if not OPENROUTER_API_KEY:
         return None
+    if is_outlook_item(item):
+        return None  # política de datos de la organización: nada del buzón corporativo sale a un modelo externo
     body = {
         "model": JEV_MODEL,
         "state": {"titulo": item.get("title", ""), "fuente": item.get("author", ""),
@@ -413,6 +421,8 @@ def process_item_ai(item_id: int, user_id_for_billing=None):
     item = get_item_by_id(item_id)
     if not item:
         return None
+    if is_outlook_item(item):
+        return None  # ya viene resumido por el agente autorizado; no se manda a ningún modelo externo
 
     content_text = item.get("transcript") or item.get("raw_content") or item.get("title")
     analysis = analyze_content(

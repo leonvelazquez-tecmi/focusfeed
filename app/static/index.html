@@ -235,6 +235,12 @@
   #toast.up{visibility:visible;opacity:1;pointer-events:auto;transform:translateY(0)}
   #toast button{font-weight:800;color:var(--accent);text-transform:uppercase;white-space:nowrap}
 
+  .gbox{border:2px solid var(--border);background:var(--surface);padding:12px 14px;margin:0 0 14px;box-shadow:4px 4px 0 0 var(--border)}
+  .gbox h4{margin:0 0 4px;font-family:var(--mono);font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+  .gbox p{margin:0 0 10px;font-size:14px;color:var(--text-2)}
+  .gbox .btn-wide+.btn-wide{margin-top:8px}
+  .srcrow .nm span.srctag{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);margin-top:2px}
+
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{animation:none !important;transition:none !important}
     .ticker .run{transform:none}
@@ -332,6 +338,18 @@
   </div>
 </div>
 
+<!-- Modal Google -->
+<div id="modal-google" class="modal hidden">
+  <div class="sheet">
+    <h3>Conectar Google <button class="ico" data-act="close" data-modal="modal-google">✕</button></h3>
+    <p style="color:var(--text-2);font-size:15px;margin:0 0 10px">FocusFeed lee, solo en modo lectura, tus suscripciones de YouTube y las newsletters de tu Gmail (envíos masivos). No lee tus correos personales y no envía nada. Cuando te suscribes a algo nuevo, lo agrega solo.</p>
+    <p style="color:var(--text-2);font-size:15px;margin:0 0 10px">Conecta solo tu cuenta personal: una cuenta corporativa se rechaza.</p>
+    <p style="color:var(--text-3);font-size:14px;margin:0 0 10px">LinkedIn y Medium: llegan solo las newsletters que te mandan por correo. Su feed de publicaciones no se puede seguir.</p>
+    <div id="g-key-wrap" class="hidden"><label class="lbl">Llave de dueño</label><input id="g-key" type="password" class="field" autocomplete="off"></div>
+    <button class="btn" data-act="google-connect">Conectar con Google</button>
+  </div>
+</div>
+
 <!-- Modal IA & Gustos -->
 <div id="modal-learned" class="modal hidden">
   <div class="sheet">
@@ -361,6 +379,7 @@
 const PAGE = 16;
 let currentTab='curated', items=[], feeds=[], rendered=[], fbItemId=null, fbRating='love';
 let syncing=false, enrichRounds=0, undoTimer=null, srcQuery='';
+let google={configured:false,connected:false};
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -470,6 +489,49 @@ async function api(path,opts){
   // Sin esto la interfaz daba por buena una escritura que nunca ocurrió.
   if(!r.ok || data.status==='error') throw new Error(data.message || `HTTP ${r.status}`);
   return data;
+}
+
+const ADMIN_KEY_STORE='ff-admin-key';
+function adminHeaders(){ try{ const k=localStorage.getItem(ADMIN_KEY_STORE); return k?{'X-Admin-Key':k}:{}; }catch(e){ return {}; } }
+async function loadGoogle(){
+  try{ google=await api('/api/google/status'); }catch(e){ google={configured:false,connected:false}; }
+}
+function googleBoxHTML(){
+  if(!google.configured) return '';
+  if(!google.connected) return `<div class="gbox"><h4>Detección automática</h4><p>Conecta tu Google y FocusFeed se entera solo cuando te suscribes en YouTube o te llega una newsletter nueva.</p><button class="btn-wide accent" data-act="open-google">Conectar Google</button></div>`;
+  const last=google.last_scan_at?relTime(google.last_scan_at):'';
+  const cuando=!last?'sin revisar todavía':(last==='ahora'?'ahora mismo':'hace '+last);
+  return `<div class="gbox"><h4>Google conectado</h4><p>Detección automática activa · última revisión ${cuando}${google.auto_sources?` · ${google.auto_sources} fuentes detectadas`:''}.</p><button class="btn-wide" data-act="google-discover">Buscar ahora</button><button class="btn-wide" data-act="google-disconnect">Desconectar</button></div>`;
+}
+async function discoverNow(force){
+  const d=await api('/api/google/discover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({force:!!force})});
+  if(d.status==='reconnect'){ google.connected=false; toast('Vuelve a conectar Google: el permiso caducó.'); return d; }
+  if(d.status==='account_not_allowed'){ google.connected=false; toast('Esa es una cuenta corporativa. Conecta una cuenta personal.'); return d; }
+  const added=d.added||[];
+  if(added.length){
+    await loadFeeds(); await syncAll(); await loadGoogle();
+    if(currentTab==='sources') renderSources();
+    toast(`Se agregaron ${added.length} ${added.length===1?'fuente nueva':'fuentes nuevas'}`,'Deshacer',async()=>{
+      try{
+        for(const a of added) await api(`/api/feeds/${a.feed_id}/dismiss`,{method:'POST'});
+        await loadFeeds(); if(currentTab==='sources') renderSources(); loadItems();
+      }catch(e){ toast('No se pudo deshacer: '+e.message); }
+    });
+  }else if(force){
+    toast(d.errors&&d.errors.length?'Revisión con avisos: '+d.errors[0]:'No hay fuentes nuevas');
+    await loadGoogle(); if(currentTab==='sources') renderSources();
+  }
+  return d;
+}
+function handleGoogleReturn(){
+  const q=new URLSearchParams(location.search), g=q.get('google');
+  if(!g) return false;
+  history.replaceState(null,'',location.pathname);
+  if(g==='ok'){
+    toast('Google conectado. Buscando tus suscripciones…');
+    loadGoogle().then(()=>discoverNow(true)).catch(e=>toast('No se pudo revisar: '+e.message));
+  }else toast(q.get('msg')||'No se pudo conectar Google.');
+  return g==='ok';
 }
 
 async function loadFeeds(){
@@ -744,24 +806,27 @@ function render(animate){
   attachSwipe();
 }
 
+const ORIGIN_LABEL={youtube:'YouTube',gmail_rss:'newsletter',outlook_rss:'newsletter',gmail_email:'por correo',outlook_email:'por correo'};
 function renderSources(){
   const el=$('#sources');
   if(!feeds.length){
-    el.innerHTML=`<div class="empty"><div style="font-size:34px">📡</div><h3>Sin canales</h3><p>Pega tu OPML de Feedly o la URL de un canal.</p><button class="btn-wide accent" data-act="open-add">+ Agregar fuentes</button></div>`;
+    el.innerHTML=googleBoxHTML()+`<div class="empty"><div style="font-size:34px">📡</div><h3>Sin canales</h3><p>Pega tu OPML de Feedly o la URL de un canal.</p><button class="btn-wide accent" data-act="open-add">+ Agregar fuentes</button></div>`;
     return;
   }
   const q=srcQuery.toLowerCase();
   const list=feeds.filter(f=>!q||(f.title||'').toLowerCase().includes(q)||(f.custom_category||'').toLowerCase().includes(q));
   const cats={};
   list.forEach(f=>{ const c=f.custom_category||'General'; (cats[c]=cats[c]||[]).push(f); });
-  let html=`<input class="searchbox" id="src-search" placeholder="Buscar entre tus ${feeds.length} fuentes…" value="${esc(srcQuery)}">
+  let html=googleBoxHTML()+`<input class="searchbox" id="src-search" placeholder="Buscar entre tus ${feeds.length} fuentes…" value="${esc(srcQuery)}">
     <button class="btn-wide accent" data-act="sync">⚡ Sincronizar todas</button>`;
   for(const [c,fl] of Object.entries(cats)){
     html+=`<div class="grp">${esc(c)} · ${fl.length}</div><div class="srclist">`+fl.map(f=>{
-      const ic=f.feed_type==='youtube'?'🎬':(f.feed_type==='substack'?'💌':'📄');
+      const ic=f.feed_type==='email'?'✉️':(f.feed_type==='youtube'?'🎬':(f.feed_type==='substack'?'💌':'📄'));
+      const tag=ORIGIN_LABEL[f.origin]?`<span class="srctag">detectada sola · ${ORIGIN_LABEL[f.origin]}</span>`:'';
+      const sub=f.feed_type==='email'?'Newsletter recibida por correo':esc(f.feed_url);
       return `<div class="srcrow"><span style="font-size:19px">${ic}</span>
-        <div class="nm"><b>${esc(f.title)}</b><span>${esc(f.feed_url)}</span></div>
-        <button class="act icon-only" data-act="sync-one" data-id="${f.id}">↻</button>
+        <div class="nm"><b>${esc(f.title)}</b><span>${sub}</span>${tag}</div>
+        ${f.feed_type==='email'?'':`<button class="act icon-only" data-act="sync-one" data-id="${f.id}">↻</button>`}
         <button class="act icon-only" data-act="del-feed" data-id="${f.id}">✕</button></div>`;
     }).join('')+`</div>`;
   }
@@ -958,6 +1023,26 @@ document.addEventListener('click',async e=>{
   else if(act==='retry-items') loadItems();
   else if(act==='clear-type'){ $('#filter-type').value='all'; loadItems(); }
   else if(act==='open-add') openModal('modal-add');
+  else if(act==='open-google'){
+    $('#g-key-wrap').classList.toggle('hidden',!google.admin_required);
+    try{ $('#g-key').value=localStorage.getItem(ADMIN_KEY_STORE)||''; }catch(e){}
+    openModal('modal-google');
+  }
+  else if(act==='google-connect'){
+    const key=$('#g-key').value.trim();
+    try{ if(key) localStorage.setItem(ADMIN_KEY_STORE,key); }catch(e){}
+    const d=await api('/api/google/connect',{method:'POST',headers:adminHeaders()});
+    location.href=d.url;
+  }
+  else if(act==='google-discover'){
+    toast('Buscando suscripciones nuevas…');
+    await discoverNow(true);
+  }
+  else if(act==='google-disconnect'){
+    if(!confirm('¿Desconectar Google? Las fuentes ya agregadas se quedan.')) return;
+    await api('/api/google/disconnect',{method:'POST',headers:adminHeaders()});
+    await loadGoogle(); renderSources(); toast('Google desconectado');
+  }
   else if(act==='open-learned'){ loadProfile(); openModal('modal-learned'); }
   else if(act==='close') closeModal(el.dataset.modal);
   else if(act==='submit-feedback') submitFeedback();
@@ -988,7 +1073,7 @@ document.addEventListener('click',async e=>{
   }
   else if(act==='del-feed'){
     const f=feeds.find(x=>x.id===id); if(!f) return;
-    if(!confirm(`¿Eliminar ${f.title}?`)) return;
+    if(!confirm(ORIGIN_LABEL[f.origin]?`¿Quitar ${f.title}? No volverá a agregarse sola.`:`¿Eliminar ${f.title}?`)) return;
     await api('/api/feeds/'+id,{method:'DELETE'});
     await loadFeeds(); renderSources(); toast('Fuente eliminada');
   }
@@ -1010,7 +1095,16 @@ if(DEV_USER){
 
 applyTheme(currentTheme());
 
-(async function init(){ await loadFeeds(); await loadItems(); loadProfile(); autoSyncIfStale(); })();
+(async function init(){
+  await loadFeeds(); await loadItems(); loadProfile();
+  await loadGoogle();
+  const volvio=handleGoogleReturn();
+  let hallo=false;
+  if(google.connected && !volvio){
+    try{ const d=await discoverNow(false); hallo=(d.added||[]).length>0; }catch(e){}
+  }
+  if(!hallo && !volvio) autoSyncIfStale();
+})();
 </script>
 </body>
 </html>

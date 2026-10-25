@@ -173,6 +173,22 @@ def init_db():
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS dismissed_sources (
+        user_id TEXT NOT NULL,
+        source_key TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, source_key)
+    );
+
+    CREATE TABLE IF NOT EXISTS google_connections (
+        user_id TEXT PRIMARY KEY,
+        refresh_token TEXT NOT NULL,
+        scopes TEXT,
+        connected_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_scan_at TEXT,
+        gmail_cursor TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_subs_user ON subscriptions(user_id);
     CREATE INDEX IF NOT EXISTS idx_uitems_user_status ON user_items(user_id, status);
     CREATE INDEX IF NOT EXISTS idx_usage_user_date ON ai_usage(user_id, created_at);
@@ -182,5 +198,15 @@ def init_db():
     for col in ("etag", "last_modified"):
         if col not in cols:
             cursor.execute(f"ALTER TABLE feeds ADD COLUMN {col} TEXT")
+    # Fuentes automáticas (migración v5 de Supabase): dueño de lo privado y origen
+    # de cada suscripción.
+    if "owner_user_id" not in cols:
+        cursor.execute("ALTER TABLE feeds ADD COLUMN owner_user_id TEXT")
+    item_cols = {r[1] for r in cursor.execute("PRAGMA table_info(items)").fetchall()}
+    if "owner_user_id" not in item_cols:
+        cursor.execute("ALTER TABLE items ADD COLUMN owner_user_id TEXT")
+    sub_cols = {r[1] for r in cursor.execute("PRAGMA table_info(subscriptions)").fetchall()}
+    if "origin" not in sub_cols:
+        cursor.execute("ALTER TABLE subscriptions ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual'")
     conn.commit()
     conn.close()

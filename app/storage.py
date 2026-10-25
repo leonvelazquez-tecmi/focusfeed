@@ -6,7 +6,7 @@ que lea o escriba algo personal recibe `user_id` como primer argumento.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.db import (
     is_supabase, supabase_request,
@@ -296,7 +296,8 @@ def get_pending_item_ids(limit: int = 10):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id FROM items WHERE COALESCE(ai_processed,0) = 0 ORDER BY published_at DESC LIMIT ?",
+        "SELECT id FROM items WHERE COALESCE(ai_processed,0) = 0 AND owner_user_id IS NULL "
+        "ORDER BY published_at DESC LIMIT ?",
         (limit,))
     rows = cursor.fetchall()
     conn.close()
@@ -387,6 +388,12 @@ def batch_save_items(items: list):
             "key_takeaways": item.get("key_takeaways", "[]"),
             "topic_tags": item.get("topic_tags", "[]"),
         } for item in fresh]
+        # Solo los items de correo traen estas llaves, así los feeds públicos
+        # siguen funcionando aunque la migración v5 aún no esté aplicada.
+        if any(i.get("owner_user_id") for i in fresh):
+            for row, item in zip(clean_batch, fresh):
+                row["owner_user_id"] = item.get("owner_user_id")
+                row["ai_processed"] = 1 if item.get("ai_processed") else 0
 
         res = supabase_request(
             "items?on_conflict=guid", method="POST", data=clean_batch,
@@ -409,7 +416,11 @@ def fetch_feeds(user_id: str):
     """Feeds a los que este usuario está suscrito, con su categoría personal."""
     if is_supabase():
         res = supabase_request(
-            f"subscriptions?user_id=eq.{user_id}&select=custom_category,feeds(*)&order=custom_category.asc")
+            f"subscriptions?user_id=eq.{user_id}&select=custom_category,origin,feeds(*)&order=custom_category.asc")
+        if not isinstance(res, list):
+            # Aún sin la migración v5: sin la columna origin la app sigue funcionando.
+            res = supabase_request(
+                f"subscriptions?user_id=eq.{user_id}&select=custom_category,feeds(*)&order=custom_category.asc")
         if not isinstance(res, list):
             return []
         feeds = []
@@ -418,6 +429,7 @@ def fetch_feeds(user_id: str):
             if not feed:
                 continue
             feed["custom_category"] = row.get("custom_category") or "General"
+            feed["origin"] = row.get("origin") or "manual"
             feeds.append(feed)
         feeds.sort(key=lambda f: ((f.get("custom_category") or ""), (f.get("title") or "")))
         return feeds
@@ -425,7 +437,7 @@ def fetch_feeds(user_id: str):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT f.*, s.custom_category AS custom_category
+        SELECT f.*, s.custom_category AS custom_category, s.origin AS origin
           FROM feeds f
           JOIN subscriptions s ON s.feed_id = f.id
          WHERE s.user_id = ?
@@ -438,13 +450,14 @@ def fetch_feeds(user_id: str):
 
 def fetch_all_active_feeds():
     """Todos los feeds del corpus. Lo usa el cron: se sincroniza una vez,
-    sirve a todos los suscriptores."""
+    sirve a todos los suscriptores. Los feeds de correo (feed_type 'email') no
+    tienen URL que bajar: su contenido entra por google_sync y outlook_ingest."""
     if is_supabase():
-        res = supabase_request("feeds?select=*&order=id.asc")
+        res = supabase_request("feeds?select=*&feed_type=neq.email&order=id.asc")
         return res if isinstance(res, list) else []
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM feeds ORDER BY id ASC")
+    cursor.execute("SELECT * FROM feeds WHERE feed_type != 'email' ORDER BY id ASC")
     feeds = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return feeds
@@ -484,6 +497,9 @@ def batch_create_feeds(feeds_list: list):
             "channel_id": f.get("channel_id"),
             "is_active": True
         } for f in feeds_list]
+        if any(f.get("owner_user_id") for f in feeds_list):
+            for row, f in zip(clean_batch, feeds_list):
+                row["owner_user_id"] = f.get("owner_user_id")
 
         res = supabase_request(
             "feeds?on_conflict=feed_url", method="POST", data=clean_batch,
@@ -502,11 +518,11 @@ def batch_create_feeds(feeds_list: list):
     for f in feeds_list:
         try:
             cursor.execute("""
-                INSERT INTO feeds (title, feed_url, site_url, feed_type, channel_id)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO feeds (title, feed_url, site_url, feed_type, channel_id, owner_user_id)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(feed_url) DO UPDATE SET title=excluded.title
             """, (f["title"], f["feed_url"], f.get("site_url", ""),
-                  f.get("feed_type", "rss"), f.get("channel_id")))
+                  f.get("feed_type", "rss"), f.get("channel_id"), f.get("owner_user_id")))
             row = cursor.execute("SELECT id FROM feeds WHERE feed_url = ?",
                                  (f["feed_url"],)).fetchone()
             created.append({"id": row["id"], "feed_url": f["feed_url"]})
@@ -518,11 +534,14 @@ def batch_create_feeds(feeds_list: list):
     return created
 
 
-def subscribe(user_id: str, feed_id: int, category: str = "General"):
+def subscribe(user_id: str, feed_id: int, category: str = "General", origin: str = "manual"):
     if is_supabase():
+        payload = {"user_id": user_id, "feed_id": int(feed_id), "custom_category": category}
+        if origin != "manual":  # sin la llave, funciona aun sin la migración v5
+            payload["origin"] = origin
         res = supabase_request(
             "subscriptions?on_conflict=user_id,feed_id", method="POST",
-            data={"user_id": user_id, "feed_id": int(feed_id), "custom_category": category},
+            data=payload,
             headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
         if not isinstance(res, list):
             err = res.get("message") if isinstance(res, dict) else str(res)
@@ -531,24 +550,27 @@ def subscribe(user_id: str, feed_id: int, category: str = "General"):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO subscriptions (user_id, feed_id, custom_category) VALUES (?, ?, ?)
-        ON CONFLICT(user_id, feed_id) DO UPDATE SET custom_category=excluded.custom_category
-    """, (user_id, int(feed_id), category))
+        INSERT INTO subscriptions (user_id, feed_id, custom_category, origin) VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, feed_id) DO UPDATE SET custom_category=excluded.custom_category,
+            origin=excluded.origin
+    """, (user_id, int(feed_id), category, origin))
     conn.commit()
     conn.close()
 
 
 def create_or_update_feed(user_id: str, title: str, feed_url: str,
                           feed_type: str = "youtube", category: str = "General",
-                          site_url: str = ""):
-    created = batch_create_feeds([{
-        "title": title, "feed_url": feed_url,
-        "feed_type": feed_type, "site_url": site_url
-    }])
+                          site_url: str = "", origin: str = "manual",
+                          owner_user_id: str = None):
+    feed = {"title": title, "feed_url": feed_url,
+            "feed_type": feed_type, "site_url": site_url}
+    if owner_user_id:
+        feed["owner_user_id"] = owner_user_id
+    created = batch_create_feeds([feed])
     if not created:
         raise RuntimeError(f"No se pudo crear/actualizar el feed: {feed_url}")
     feed_id = created[0]["id"]
-    subscribe(user_id, feed_id, category)
+    subscribe(user_id, feed_id, category, origin)
     return feed_id
 
 
@@ -574,6 +596,181 @@ def unsubscribe(user_id: str, feed_id: int):
     cursor.execute("""DELETE FROM user_items WHERE user_id = ?
                       AND item_id IN (SELECT id FROM items WHERE feed_id = ?)""",
                    (user_id, int(feed_id)))
+    conn.commit()
+    conn.close()
+
+
+# ==========================================================
+# Fuentes automáticas (Google y buzón corporativo)
+# ==========================================================
+
+def source_key(raw: str) -> str:
+    """Clave estable de una fuente para recordar lo que la persona quitó:
+    minúsculas, sin esquema, sin 'www.' y sin diagonal final."""
+    key = (raw or "").strip().lower()
+    for prefix in ("https://", "http://"):
+        if key.startswith(prefix):
+            key = key[len(prefix):]
+    if key.startswith("www."):
+        key = key[4:]
+    return key.rstrip("/")
+
+
+def private_feed_url(user_id: str, clave: str) -> str:
+    """Los feeds de correo no tienen URL real. Llevan el user_id para que dos
+    personas con la misma newsletter no compartan fila (feed_url es UNIQUE)."""
+    return f"email:{user_id}:{source_key(clave)}"
+
+
+def list_dismissed(user_id: str) -> set:
+    if is_supabase():
+        res = supabase_request(f"dismissed_sources?user_id=eq.{user_id}&select=source_key&limit=5000")
+        return {r["source_key"] for r in res} if isinstance(res, list) else set()
+    conn = get_db_connection()
+    rows = conn.execute("SELECT source_key FROM dismissed_sources WHERE user_id = ?",
+                        (user_id,)).fetchall()
+    conn.close()
+    return {r["source_key"] for r in rows}
+
+
+def dismiss_source(user_id: str, raw: str):
+    key = source_key(raw)
+    if not key:
+        return
+    if is_supabase():
+        supabase_request(
+            "dismissed_sources?on_conflict=user_id,source_key", method="POST",
+            data={"user_id": user_id, "source_key": key},
+            headers_extra={"Prefer": "resolution=ignore-duplicates,return=minimal"})
+        return
+    conn = get_db_connection()
+    conn.execute("INSERT OR IGNORE INTO dismissed_sources (user_id, source_key) VALUES (?, ?)",
+                 (user_id, key))
+    conn.commit()
+    conn.close()
+
+
+def get_feed_by_id(feed_id: int):
+    if is_supabase():
+        res = supabase_request(f"feeds?id=eq.{int(feed_id)}&select=*&limit=1")
+        return res[0] if isinstance(res, list) and res else None
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM feeds WHERE id = ?", (int(feed_id),)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def forget_feed(user_id: str, feed_id: int, dismiss: bool = False):
+    """Quita la suscripción. Si no era manual (o se pide con dismiss), también
+    recuerda la fuente para que la detección automática no la vuelva a agregar."""
+    mine = next((f for f in fetch_feeds(user_id) if f.get("id") == int(feed_id)), None)
+    if mine and (dismiss or (mine.get("origin") or "manual") != "manual"):
+        dismiss_source(user_id, mine.get("feed_url", ""))
+    unsubscribe(user_id, feed_id)
+
+
+def count_auto_subscriptions(user_id: str) -> int:
+    return sum(1 for f in fetch_feeds(user_id) if (f.get("origin") or "manual") != "manual")
+
+
+def purge_email_bodies(days: int = 30):
+    """Retención de correo: pasado el plazo, el cuerpo guardado de los items
+    privados se borra; quedan título, enlace y resumen."""
+    cutoff = (datetime.utcnow() - timedelta(days=int(days))).isoformat()
+    if is_supabase():
+        supabase_request(
+            f"items?owner_user_id=not.is.null&created_at=lt.{cutoff}&raw_content=neq.",
+            method="PATCH", data={"raw_content": "", "transcript": ""},
+            headers_extra={"Prefer": "return=minimal"})
+        return
+    conn = get_db_connection()
+    conn.execute("UPDATE items SET raw_content = '', transcript = '' "
+                 "WHERE owner_user_id IS NOT NULL AND created_at < ?", (cutoff,))
+    conn.commit()
+    conn.close()
+
+
+def save_google_connection(user_id: str, refresh_token: str, scopes: str = ""):
+    row = {"user_id": user_id, "refresh_token": refresh_token, "scopes": scopes,
+           "connected_at": _now(), "gmail_cursor": None}
+    if is_supabase():
+        res = supabase_request(
+            "google_connections?on_conflict=user_id", method="POST", data=row,
+            headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
+        if not isinstance(res, list):
+            err = res.get("message") if isinstance(res, dict) else str(res)
+            raise RuntimeError(f"Supabase rechazo la conexion de Google: {err}")
+        return
+    conn = get_db_connection()
+    conn.execute(
+        """INSERT INTO google_connections (user_id, refresh_token, scopes, connected_at, gmail_cursor)
+           VALUES (?, ?, ?, ?, NULL)
+           ON CONFLICT(user_id) DO UPDATE SET refresh_token=excluded.refresh_token,
+               scopes=excluded.scopes, connected_at=excluded.connected_at, gmail_cursor=NULL""",
+        (user_id, refresh_token, scopes, row["connected_at"]))
+    conn.commit()
+    conn.close()
+
+
+def get_google_connection(user_id: str):
+    if is_supabase():
+        res = supabase_request(f"google_connections?user_id=eq.{user_id}&select=*&limit=1")
+        return res[0] if isinstance(res, list) and res else None
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM google_connections WHERE user_id = ?", (user_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_google_scan(user_id: str, gmail_cursor: str = None):
+    data = {"last_scan_at": _now()}
+    if gmail_cursor:
+        data["gmail_cursor"] = gmail_cursor
+    if is_supabase():
+        supabase_request(f"google_connections?user_id=eq.{user_id}", method="PATCH", data=data,
+                         headers_extra={"Prefer": "return=minimal"})
+        return
+    conn = get_db_connection()
+    sets = ", ".join(f"{k} = ?" for k in data)
+    conn.execute(f"UPDATE google_connections SET {sets} WHERE user_id = ?",
+                 list(data.values()) + [user_id])
+    conn.commit()
+    conn.close()
+
+
+def list_google_connections():
+    if is_supabase():
+        res = supabase_request("google_connections?select=user_id,last_scan_at&order=last_scan_at.asc.nullsfirst")
+        return res if isinstance(res, list) else []
+    conn = get_db_connection()
+    rows = conn.execute("SELECT user_id, last_scan_at FROM google_connections "
+                        "ORDER BY last_scan_at ASC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_item_ids_by_guid(guids: list) -> list:
+    guids = [g for g in guids if g]
+    if not guids:
+        return []
+    if is_supabase():
+        quoted = ",".join('"' + g.replace('"', '') + '"' for g in guids)
+        res = supabase_request(f"items?select=id&guid=in.({quoted})")
+        return [r["id"] for r in res] if isinstance(res, list) else []
+    conn = get_db_connection()
+    ph = ",".join("?" for _ in guids)
+    rows = conn.execute(f"SELECT id FROM items WHERE guid IN ({ph})", guids).fetchall()
+    conn.close()
+    return [r["id"] for r in rows]
+
+
+def delete_google_connection(user_id: str):
+    if is_supabase():
+        supabase_request(f"google_connections?user_id=eq.{user_id}", method="DELETE",
+                         headers_extra={"Prefer": "return=minimal"})
+        return
+    conn = get_db_connection()
+    conn.execute("DELETE FROM google_connections WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
 
