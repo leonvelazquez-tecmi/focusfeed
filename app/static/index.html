@@ -873,7 +873,18 @@ async function toggleSave(id){
   }
   it.status=next;
   markSaveButton(id,next==='reading');
-  toast(next==='reading'?'Guardado en tu lista':'Quitado de guardados');
+  // Lo guardado vive solo en Guardados: sale de Para ti. Quitarlo de
+  // Guardados lo devuelve a Para ti, así que sale de esa lista.
+  if(next==='reading' && currentTab==='curated'){
+    removeCard(id);
+    toast('Guardado: lo encuentras en Guardados','Deshacer',async()=>{
+      try{ await setStatus(id,'inbox'); refreshQuiet(); loadItems(); }
+      catch(e){ toast('No se pudo deshacer: '+e.message); }
+    });
+    if(rendered.length===0) loadItems();
+  }else{
+    toast(next==='reading'?'Guardado en tu lista':'Quitado de guardados');
+  }
   refreshQuiet();
   if(currentTab==='reading' && next!=='reading') removeCard(id);
 }
@@ -895,11 +906,18 @@ async function rate(id,rating){
       toast('Menos contenido así 👎');
       if(rendered.length===0) loadItems();
     }else if(res.new_status==='reading'){
-      // El corazón guarda automático: la tarjeta se queda, marcada.
-      markSaveButton(id,true);
-      const b=document.querySelector(`.act[data-act="love"][data-id="${id}"]`);
-      if(b) b.textContent='♥';
-      toast('Guardado en tu lista ❤️');
+      // El corazón guarda automático. Lo guardado vive solo en Guardados:
+      // en Para ti la tarjeta sale; en otras vistas se queda, marcada.
+      if(currentTab==='curated'){
+        removeCard(id);
+        toast('Guardado ❤️ lo encuentras en Guardados');
+        if(rendered.length===0) loadItems();
+      }else{
+        markSaveButton(id,true);
+        const b=document.querySelector(`.act[data-act="love"][data-id="${id}"]`);
+        if(b) b.textContent='♥';
+        toast('Guardado en tu lista ❤️');
+      }
       refreshQuiet();
     }else{
       toast('Anotado');
