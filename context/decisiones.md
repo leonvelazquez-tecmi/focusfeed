@@ -71,3 +71,16 @@ Principio que deja: un score y su explicación salen siempre del mismo motor.
 ## 2026-10-17 · Ícono propio: la marca "FF" del encabezado
 
 La app no tenía ícono propio (el manifest apuntaba a una imagen externa y `/favicon.ico` daba 404). No existía un logo aparte, así que el ícono sale de la marca "FF" del encabezado: tinta clara sobre #0a0a0a con sombra roja dura #dc2828, dibujada con rectángulos para no depender de fuentes. León lo aprobó al verlo en el iPhone.
+
+## 2026-11-10 · JEV recibe lo que el lector aprendió, y Guardar cuenta como señal
+
+Diagnóstico: tras semanas de uso "Para ti" seguía irrelevante porque el score de JEV solo veía los temas declarados, 8 autores en orden arbitrario y las primeras 8 etiquetas descartadas. Los temas aprendidos con corazón, relevante y clic vivían en el perfil pero solo los leía el motor de respaldo; Guardar y Visto no enseñaban nada; y el pulgar abajo nunca penalizaba a la fuente.
+
+Decisión (cambia el prompt de IA, autorizado por León): la pregunta a JEV incluye hasta 8 temas por peso neto a favor y en contra, fuentes que más valora y que suele descartar (saldo de +3 o más, o de -5 o menos) y los últimos 5 títulos que le gustaron y que descartó. Guardar suma (fuente +2, temas +1) y quitarlo lo deshace. El pulgar abajo resta 3 a la fuente. Todo vive en `learned_preferences`; no hay migración.
+
+Costo de IA (decisión de negocio): mismas llamadas, preguntas más largas, unos 150 a 250 tokens más por llamada [Inference, sin llave de OpenRouter en la sesión]. Se mide después del deploy con `ai_usage.kind = 'jev_score'`.
+
+Privacidad: del buzón corporativo nunca se guarda un título como ejemplo, y su remitente y etiquetas se marcan como privados y no entran a la pregunta. Límite conocido: lo del buzón que se calificó antes de este cambio no se puede identificar hacia atrás.
+
+Lo que no resuelve: los items que ya tienen score no se recalculan, así que la mejora se nota con contenido nuevo. Recalificar y calificar desde el cron suben el costo; el corte de relevancia en "Para ti" requiere migración. Se deciden con los datos de producción.
+

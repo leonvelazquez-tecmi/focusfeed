@@ -30,7 +30,7 @@ def main():
     key = llave()
     if not key:
         sys.exit("Sin OPENROUTER_API_KEY")
-    filas = supabase_request("user_items?user_rating=neq.none&select=user_id,item_id,user_rating,relevance_score&limit=2000")
+    filas = supabase_request("user_items?user_rating=not.in.(none,click)&select=user_id,item_id,user_rating,relevance_score&limit=2000")
     user_id = filas[0]["user_id"]
     profile = fetch_profile(user_id)
     ids = ",".join(str(f["item_id"]) for f in filas)
@@ -45,8 +45,11 @@ def main():
     for (f, item), (p, c, _) in zip(datos, res):
         h = score_for_user(item, profile)["relevance_score"]
         costo += c
-        (pos_j if f["user_rating"] in ("love", "like") else neg_j).append(p)
-        (pos_h if f["user_rating"] in ("love", "like") else neg_h).append(h)
+        if f["user_rating"] in ("click", "none"):
+            continue  # el clic es una señal débil: no es ni gusto ni descarte
+        positivo = f["user_rating"] in ("love", "like", "save")
+        (pos_j if positivo else neg_j).append(p)
+        (pos_h if positivo else neg_h).append(h)
         print(f"{f['user_rating']:8} jev={p:.2f} heur={h:3} {item['title'][:60]}")
     print(f"\npositivos={len(pos_j)} negativos={len(neg_j)}")
     print(f"AUC JEV={auc(pos_j, neg_j):.2f}  AUC heurístico={auc(pos_h, neg_h):.2f}  (0.5 = azar)")
