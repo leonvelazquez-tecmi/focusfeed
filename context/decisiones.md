@@ -96,3 +96,15 @@ Migración v9 (función de solo lectura `get_unscored_items`): la aplica León a
 
 No resuelve: el contenido sin resumen sigue sin etiquetas (el aprendizaje por temas no puede actuar sobre él), y el criterio fijo del prompt de JEV ("no vale: entretenimiento, reseña de ocio") contradice los temas de ocio de León (cine, música, enología). Eso es el PR 3 y cambia el prompt.
 
+## 2026-11-12 · El prompt de JEV respeta los temas de ocio que el lector declara
+
+Datos de León (12-nov): score mediano de lo calificado 13; promedio 50 en lo que amó, 33 en lo que descartó y 27 en lo que abrió. JEV ordena en la dirección correcta pero con poca separación. El "no vale" fijo decía "entretenimiento… reseña de ocio", lo que contradice tres de sus seis temas (cine de autor, música, enología), sus fuentes con boost (críticos de cine y música) y el tema aprendido "Reseña". [Inference: explica parte de la compresión; no se puede probar sin llamar a JEV real.]
+
+Decisión (cambia el prompt de IA, autorizado por León con plan): el texto base es genérico y no nombra los temas de nadie. "Sí vale": trata de alguno de sus temas con análisis, crítica con criterio, ideas propias o conocimiento útil. "No vale": ruido (noticia efímera, clickbait, promoción o anuncio, contenido genérico sin criterio propio, tema ajeno a sus intereses declarados). Un tema declarado no es ruido ni "solo entretenimiento" si se trata con análisis o crítica. `DEFAULT_CRITERIA` no cambia, porque aplica a otros usuarios.
+
+Además: las etiquetas aprendidas solo viajan a JEV con saldo neto de 2 o más (un clic o un "relevante" solos son +1 y quedan fuera), y "Actualizar temas" ya no pisa el criterio con vacío (`save_profile_data(criteria=None)` no toca la columna).
+
+Costo de IA (decisión de negocio): mismo número de llamadas; la pregunta crece unas decenas de tokens por el texto nuevo y se acorta algo por las etiquetas filtradas [Inference, sin llave en la sesión]. Se mide con `ai_usage.kind = 'jev_score'`.
+
+Riesgo: el efecto sobre el score de JEV no se pudo medir con JEV real. Se valida con `routines/jev_eval.py --comparar` (prompt anterior contra nuevo sobre las calificaciones reales) o, tras el deploy, con SQL sobre lo calificado después. Se revierte por git. Esto solo afecta lo que se califique de ahora en adelante; recalificar lo de los últimos 30 días es un paso aparte que lleva `UPDATE` (tabla de respaldo, consulta de prueba y rollback) y lo aplica León.
+
