@@ -513,19 +513,38 @@ def process_item_ai(item_id: int, user_id_for_billing=None):
     return analysis
 
 
-def score_pending_for_user(user_id: str, limit: int = 40):
-    """Pone score personal a los items nuevos que este usuario todavía no tiene calificados.
+# Calificación por lotes. Antes se miraban solo los 160 items más recientes de la
+# bandeja y se calificaban 40 por llamada: lo que quedaba más atrás nunca se
+# calificaba y entraba a "Para ti" con 20, más que el score típico de JEV.
+SCORE_BATCH = 120          # items por llamada a /api/items/process-pending
+SCORE_CHUNK = 16           # se guarda por tandas, para no perder avance si se corta
+SCORE_TIME_BUDGET = 25     # segundos; deja margen bajo el maxDuration de 60 s
+LEGACY_SCORE_WINDOW = 160  # comportamiento previo, si falta la migración v9
+LEGACY_SCORE_BATCH = 40
 
-    Se mira la bandeja (los más recientes primero), no "Para ti": esa pestaña
-    ordena por score, así que los items sin calificar quedaban siempre fuera de
-    la ventana y nunca se calificaban.
+
+def score_pending_batch(user_id: str, limit: int = SCORE_BATCH, budget_seconds: float = SCORE_TIME_BUDGET) -> dict:
+    """Pone score personal a lo reciente (30 días) que este usuario aún no tiene calificado.
+
+    Busca directamente lo pendiente (storage.fetch_unscored_items) en vez de mirar
+    una ventana de la bandeja. Devuelve {"scored": n, "has_more": bool}; has_more
+    es True si quedan pendientes o si el tope de tiempo cortó el lote.
     """
     from concurrent.futures import ThreadPoolExecutor
-    from app.storage import fetch_items, fetch_profile, save_user_score
+    from app.storage import fetch_unscored_items, fetch_items, fetch_profile, save_user_score
 
+    inicio = time.time()
     profile = fetch_profile(user_id)
-    data = fetch_items(user_id, tab="inbox", limit=limit * 4)
-    pendientes = [i for i in data.get("items", []) if i.get("relevance_score") is None][:limit]
+    pendientes = fetch_unscored_items(user_id, limit=limit + 1)
+    if pendientes is None:
+        # La función SQL get_unscored_items (migración v9) aún no existe: se usa
+        # el comportamiento anterior en vez de fallar.
+        data = fetch_items(user_id, tab="inbox", limit=LEGACY_SCORE_WINDOW)
+        todos = [i for i in data.get("items", []) if i.get("relevance_score") is None]
+        limit = LEGACY_SCORE_BATCH
+        pendientes = todos
+    hay_mas = len(pendientes) > limit
+    pendientes = pendientes[:limit]
 
     def calificar(item):
         # Un motor por item, nunca mezclados. Si JEV califica, el score es suyo y
@@ -537,11 +556,22 @@ def score_pending_for_user(user_id: str, limit: int = 40):
             return item["id"], {"relevance_score": jev_score, "curator_note": None}
         return item["id"], score_for_user(item, profile)
 
+    hechos = 0
     with ThreadPoolExecutor(8) as ex:
-        resultados = list(ex.map(calificar, pendientes))
-    for item_id, result in resultados:
-        save_user_score(user_id, item_id, result["relevance_score"], result["curator_note"])
-    return len(resultados)
+        for k in range(0, len(pendientes), SCORE_CHUNK):
+            if hechos and time.time() - inicio > budget_seconds:
+                hay_mas = True  # el tope de tiempo cortó el lote; el cliente vuelve a pedir
+                break
+            tanda = pendientes[k:k + SCORE_CHUNK]
+            for item_id, result in ex.map(calificar, tanda):
+                save_user_score(user_id, item_id, result["relevance_score"], result["curator_note"])
+                hechos += 1
+    return {"scored": hechos, "has_more": hay_mas}
+
+
+def score_pending_for_user(user_id: str, limit: int = SCORE_BATCH) -> int:
+    """Envoltura que devuelve solo cuántos items se calificaron."""
+    return score_pending_batch(user_id, limit)["scored"]
 
 
 # Qué le pasa al item en el feed según cómo lo califiques.

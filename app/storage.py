@@ -140,6 +140,37 @@ def fetch_items(user_id: str, tab="curated", type_filter="all", limit=120):
     return {"items": items, "counts": counts, "debug": debug}
 
 
+SCORE_HORIZON_DAYS = 30  # "Para ti" solo usa el score de lo publicado en este lapso (v8)
+
+
+def fetch_unscored_items(user_id: str, days: int = SCORE_HORIZON_DAYS, limit: int = 120):
+    """Items de este usuario por calificar: bandeja, publicados en los últimos
+    `days` días y sin score, del más nuevo al más viejo.
+
+    Devuelve None si la función SQL `get_unscored_items` (migración v9) todavía
+    no existe en Supabase: quien llama cae entonces al comportamiento anterior
+    en vez de fallar. Espejo SQLite de supabase_migration_v9_unscored_items.sql.
+    """
+    if is_supabase():
+        res = _rpc("get_unscored_items", {"p_user_id": user_id, "p_days": int(days), "p_limit": int(limit)})
+        return res if isinstance(res, list) else None
+
+    conn = get_db_connection()
+    rows = conn.execute("""
+        SELECT i.id, i.guid, i.title, i.author, i.content_type, i.summary_tldr,
+               substr(i.raw_content, 1, 800) AS raw_content, i.topic_tags
+          FROM items i
+          JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
+          LEFT JOIN user_items ui ON ui.item_id = i.id AND ui.user_id = ?
+         WHERE ui.relevance_score IS NULL
+           AND COALESCE(ui.status, 'inbox') = 'inbox'
+           AND (julianday('now') - julianday(i.published_at)) <= ?
+         ORDER BY i.published_at DESC
+         LIMIT ?""", (user_id, user_id, int(days), int(limit))).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 # ==========================================================
 # Estado personal
 # ==========================================================
