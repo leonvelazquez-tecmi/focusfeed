@@ -336,6 +336,12 @@ def score_for_user(item: dict, profile: dict) -> dict:
     if author and _author_strength(learned, author) <= AUTHOR_AVOID_AT:
         score -= AUTHOR_AVOID_PENALTY
 
+    # Likes de YouTube al canal: más que un clic (+3, tope +9), mucho menos que un corazón (+15).
+    for nombre, veces in ((learned.get("yt") or {}).get("authors") or {}).items():
+        if nombre and nombre.lower() in author.lower():
+            score += min(int(veces) * YT_HEURISTIC_POINTS, YT_HEURISTIC_CAP)
+            break
+
     for tag, weight in (learned.get("boosted_tags") or {}).items():
         if tag in tags or tag in matched:
             score += min(int(weight) * 5, 20)
@@ -408,8 +414,18 @@ def _learned_for_prompt(learned: dict) -> dict:
                 out.append(t.strip()[:80])
         return out
 
+    # Likes de YouTube: se ordenan por cantidad de likes; el tope solo limita la fuerza para el umbral.
+    yt = learned.get("yt") or {}
+    ya_valorados = {a.lower() for a in valora}
+    yt_canales = [a for a, n in sorted((yt.get("authors") or {}).items(), key=lambda kv: (-int(kv[1]), kv[0]))
+                  if a and min(int(n) * YT_AUTHOR_POINTS, YT_AUTHOR_CAP) >= YT_PROMPT_AUTHOR_MIN
+                  and a.lower() not in ya_valorados][:YT_PROMPT_MAX]
+    yt_temas = [t for t, n in sorted((yt.get("tags") or {}).items(), key=lambda kv: (-int(kv[1]), kv[0]))
+                if t and min(int(n), YT_TAG_CAP) >= PROMPT_TAG_MIN_NET][:YT_PROMPT_MAX]
+
     return {"valora": valora, "descarta_autores": descarta_a, "temas_si": temas_si,
-            "temas_no": temas_no, "ej_si": titulos("liked_examples"), "ej_no": titulos("disliked_examples")}
+            "temas_no": temas_no, "ej_si": titulos("liked_examples"), "ej_no": titulos("disliked_examples"),
+            "yt_canales": yt_canales, "yt_temas": yt_temas}
 
 
 # Texto base de la pregunta a JEV. Es genérico: no nombra los temas de nadie.
@@ -436,6 +452,12 @@ def _jev_question(profile: dict) -> dict:
         extra_si += f" Fuentes que más valora: {', '.join(L['valora'])}."
     if L["ej_si"]:
         extra_si += " Ejemplos recientes que le gustaron: " + "; ".join(f"«{t}»" for t in L["ej_si"]) + "."
+
+    # Likes de YouTube: nunca viajan títulos, solo nombres de canales y temas frecuentes.
+    if L["yt_canales"]:
+        extra_si += f" En YouTube suele dar like a canales como: {', '.join(L['yt_canales'])}."
+    if L["yt_temas"]:
+        extra_si += f" En los videos que le gustan en YouTube son frecuentes estos temas: {', '.join(L['yt_temas'])}."
 
     extra_no = ""
     if L["temas_no"]:
@@ -612,6 +634,14 @@ PROMPT_EXAMPLES = 5          # ejemplos que viajan en la pregunta a JEV
 PROMPT_LIST_MAX = 8          # temas o fuentes por lista en la pregunta a JEV
 PROMPT_AVOID_AUTHORS_MAX = 5
 PROMPT_TAG_MIN_NET = 2       # saldo mínimo (a favor o en contra) para que una etiqueta llegue a JEV
+# Likes de YouTube (learned["yt"]): más fuertes que un clic, más débiles que un corazón.
+YT_AUTHOR_POINTS = 2         # por like al canal
+YT_AUTHOR_CAP = 6            # tope de fuerza por canal
+YT_TAG_CAP = 6               # tope de peso por etiqueta
+YT_PROMPT_AUTHOR_MIN = 4     # fuerza mínima (2 likes) para que un canal llegue a JEV
+YT_PROMPT_MAX = 6            # canales o temas de YouTube en la pregunta a JEV
+YT_HEURISTIC_POINTS = 4      # motor de respaldo: por like al canal
+YT_HEURISTIC_CAP = 12
 
 RATING_TO_STATUS = {
     "love": "reading",

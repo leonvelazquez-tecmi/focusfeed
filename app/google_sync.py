@@ -292,6 +292,174 @@ def youtube_subscriptions(token: str, max_pages: int = 20) -> list:
 
 
 # ==========================================================
+# YouTube: los likes enseñan gustos (no se importan como items)
+# ==========================================================
+# Un like es una señal, no contenido: no entra a la bandeja. Cada corrida lee los
+# YT_LIKES_MAX más recientes y REEMPLAZA lo aprendido (foto, no suma): importar
+# dos veces no cuenta doble y un like quitado en YouTube se desaprende solo.
+# De cada video solo se usa el canal y las etiquetas; no se guarda título,
+# descripción ni id. Misma conexión y mismo permiso (youtube.readonly) que las
+# suscripciones.
+
+YT_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
+YT_LIKES_MAX = 300
+YT_LIKES_PAGE = 50
+YT_LIKES_BUDGET = 20             # segundos para leer las páginas
+YT_SHORT_MAX_SECONDS = 60        # los Shorts no cuentan (FocusFeed los saca del feed)
+YT_KEEP_AUTHORS = 200
+YT_KEEP_TAGS = 100
+YT_TAG_MIN_LEN, YT_TAG_MAX_LEN, YT_TAGS_PER_VIDEO = 3, 30, 10
+YT_REFRESH_SECONDS = 24 * 3600   # con la app abierta, se refresca como mucho una vez al día
+_DURATION_RE = re.compile(r"^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$")
+
+
+def duration_seconds(iso: str):
+    """'PT1H2M3S' -> segundos; None si no se entiende."""
+    m = _DURATION_RE.match(iso or "")
+    if not m:
+        return None
+    d, h, mi, sec = (int(x or 0) for x in m.groups())
+    return d * 86400 + h * 3600 + mi * 60 + sec
+
+
+def clean_channel(title: str) -> str:
+    """Quita el sufijo automático ' - Topic' de YouTube Music ('Artista - Topic' -> 'Artista')."""
+    return re.sub(r"\s+-\s+Topic$", "", (title or "").strip(), flags=re.IGNORECASE).strip()
+
+
+def clean_tags(tags) -> list:
+    """Minúsculas, de 3 a 30 caracteres, sin repetir, máximo 10 por video."""
+    out, seen = [], set()
+    for raw in tags or []:
+        t = re.sub(r"\s+", " ", str(raw or "")).strip().lower()
+        if YT_TAG_MIN_LEN <= len(t) <= YT_TAG_MAX_LEN and t not in seen:
+            seen.add(t)
+            out.append(t)
+            if len(out) >= YT_TAGS_PER_VIDEO:
+                break
+    return out
+
+
+def _likes_error(code: int, data: dict) -> str:
+    err = (data or {}).get("error") or {}
+    reasons = [e.get("reason") for e in (err.get("errors") or []) if isinstance(e, dict)]
+    if "quotaExceeded" in reasons or "rateLimitExceeded" in reasons:
+        return "YouTube alcanzó su límite diario de consultas. Inténtalo mañana."
+    if code in (401, 403):
+        return "Google no dejó leer tus likes de YouTube. Reconecta Google en Fuentes."
+    return f"YouTube: {_err_message(data)}"
+
+
+def youtube_likes(token: str, max_likes: int = YT_LIKES_MAX, budget_seconds: float = YT_LIKES_BUDGET) -> dict:
+    """Los likes más recientes, de 50 en 50. Devuelve {"read": n, "videos": [{"channel", "tags"}]}
+    con los Shorts y los videos sin canal ya fuera; "read" cuenta todo lo leído."""
+    started = time.time()
+    read, videos, page = 0, [], None
+    while read < max_likes:
+        if read and time.time() - started > budget_seconds:
+            break
+        params = {"part": "snippet,contentDetails", "myRating": "like", "maxResults": YT_LIKES_PAGE}
+        if page:
+            params["pageToken"] = page
+        code, data = http_json("GET", YT_VIDEOS_URL, params=params, token=token)
+        if code != 200:
+            raise GoogleError(_likes_error(code, data))
+        for it in data.get("items", []):
+            if read >= max_likes:
+                break
+            read += 1
+            snip = it.get("snippet") or {}
+            channel = clean_channel(snip.get("channelTitle"))
+            secs = duration_seconds((it.get("contentDetails") or {}).get("duration"))
+            if not channel or (secs is not None and secs <= YT_SHORT_MAX_SECONDS):
+                continue
+            videos.append({"channel": channel, "tags": clean_tags(snip.get("tags"))})
+        page = data.get("nextPageToken")
+        if not page:
+            break
+    return {"read": read, "videos": videos}
+
+
+def summarize_likes(videos: list) -> dict:
+    """Un conteo por canal y por etiqueta (los más frecuentes). Es lo único que se guarda."""
+    authors, tags = {}, {}
+    for v in videos:
+        authors[v["channel"]] = authors.get(v["channel"], 0) + 1
+        for t in v["tags"]:
+            tags[t] = tags.get(t, 0) + 1
+
+    def top(d, n):
+        return dict(sorted(d.items(), key=lambda kv: (-kv[1], kv[0]))[:n])
+
+    return {"authors": top(authors, YT_KEEP_AUTHORS), "tags": top(tags, YT_KEEP_TAGS)}
+
+
+def _yt_stale(imported_at, now: float = None) -> bool:
+    try:
+        dt = datetime.fromisoformat(str(imported_at).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return ((now or time.time()) - dt.timestamp()) >= YT_REFRESH_SECONDS
+    except (ValueError, TypeError):
+        return True
+
+
+def _learned(user_id: str) -> dict:
+    return dict(storage.fetch_profile(user_id).get("learned_preferences") or {})
+
+
+def learn_from_likes(user_id: str, force: bool = False) -> dict:
+    """Lee los likes y reemplaza lo aprendido de YouTube. Sin force solo corre si
+    la persona ya lo activó y pasó un día desde la última vez."""
+    yt = _learned(user_id).get("yt") or {}
+    if not force:
+        if not yt.get("enabled"):
+            return {"status": "disabled"}
+        if not _yt_stale(yt.get("imported_at")):
+            return {"status": "skipped"}
+
+    conn = storage.get_google_connection(user_id)
+    if not conn:
+        return {"status": "not_connected"}
+    try:
+        token = access_token(conn["refresh_token"])
+    except ReconnectNeeded:
+        storage.delete_google_connection(user_id)
+        storage.mark_google_expired(user_id)
+        return {"status": "reconnect"}
+    except GoogleError as e:
+        return {"status": "error", "message": str(e)}
+
+    if blocked_account(gmail_email(token)):
+        disconnect(user_id)
+        return {"status": "account_not_allowed"}
+
+    try:
+        res = youtube_likes(token)
+    except GoogleError as e:
+        return {"status": "error", "message": str(e)}
+
+    resumen = summarize_likes(res["videos"])
+    # Se relee justo antes de guardar: la lectura de Google tarda y en ese lapso pudo
+    # llegar una calificación que no hay que pisar.
+    learned = _learned(user_id)
+    learned["yt"] = {"enabled": True, "imported_at": datetime.now(timezone.utc).isoformat(),
+                     "likes_read": res["read"], **resumen}
+    storage.update_learned_preferences(user_id, learned)
+    return {"status": "success", "likes_read": res["read"], "channels": len(resumen["authors"]),
+            "topics": len(resumen["tags"]), "top_channels": list(resumen["authors"])[:5],
+            "top_topics": list(resumen["tags"])[:5]}
+
+
+def forget_likes(user_id: str) -> dict:
+    """Borra todo lo aprendido de YouTube y lo desactiva."""
+    learned = _learned(user_id)
+    learned.pop("yt", None)
+    storage.update_learned_preferences(user_id, learned)
+    return {"status": "success"}
+
+
+# ==========================================================
 # Gmail: lectura de envíos masivos (funciones puras, probables sin red)
 # ==========================================================
 

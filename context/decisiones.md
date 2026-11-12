@@ -108,3 +108,19 @@ Costo de IA (decisión de negocio): mismo número de llamadas; la pregunta crece
 
 Riesgo: el efecto sobre el score de JEV no se pudo medir con JEV real. Se valida con `routines/jev_eval.py --comparar` (prompt anterior contra nuevo sobre las calificaciones reales) o, tras el deploy, con SQL sobre lo calificado después. Se revierte por git. Esto solo afecta lo que se califique de ahora en adelante; recalificar lo de los últimos 30 días es un paso aparte que lleva `UPDATE` (tabla de respaldo, consulta de prueba y rollback) y lo aplica León.
 
+## 2026-11-12 · Los likes de YouTube enseñan gustos (señal, no contenido)
+
+León pidió que FocusFeed aprenda también de lo que le da like en YouTube: es una señal deliberada y de mucho más volumen que sus calificaciones dentro de la app (~300 en total).
+
+Ruta elegida: la API de YouTube con la conexión de Google que ya existe y el mismo permiso (`youtube.readonly`), que cubre `videos.list?myRating=like`. Descartados: Google Takeout (exportación manual que nunca se refresca) y yt-dlp con cookies (guardar la sesión de la persona en el servidor, frágil y contra los términos de YouTube). El flujo de recetas con yt-dlp que se mencionó no está en este repo [Need to verify].
+
+Diseño: los likes NO se importan como items (entrarían a una bandeja que ya tiene 18 mil). Se guarda una foto de conteos por canal y por etiqueta dentro de `learned_preferences.yt`; cada corrida reemplaza lo anterior, así que es idempotente, no necesita tabla de "ya vistos" ni migración, y un like quitado se desaprende. Se leen los 300 más recientes (6 páginas), sin Shorts (≤ 60 s). No se guarda título, descripción ni id.
+
+Peso (más fuerte que un clic, más débil que un corazón, porque en YouTube el like casi no cuesta): +2 por like al canal con tope +6, +1 por etiqueta con tope +6; en el motor de respaldo +4 por like con tope +12. A JEV le llegan dos frases nuevas al final de "Sí vale": canales con 2 likes o más y temas con peso 2 o más. Nunca viajan títulos. Un canal que ya está en "más valora" no se repite.
+
+Costo de IA (decisión de negocio): sin llamadas nuevas ni cambios en Gemini; la pregunta a JEV crece unas 50 a 70 tokens [Inference]. Cuota de YouTube: ≤ 6 unidades por importación, una al día como máximo.
+
+Privacidad: estos nombres de canales y temas se incluyen en la pregunta a OpenRouter (sin retención de datos); `privacidad.html` lo dice y ofrece "Olvidar mis likes de YouTube". Pendiente humano: revisar la descripción de uso del permiso en la pantalla de consentimiento de Google Cloud [Need to verify si Google lo exige].
+
+Fuera: etiquetar cada video con Gemini (mejor calidad de temas, costo por video), usar títulos como ejemplos, refresco por cron, recalificar lo reciente.
+
