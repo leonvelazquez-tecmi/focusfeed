@@ -106,8 +106,12 @@ def main():
     despues = aprendido()
     # liked_examples es una ventana de los últimos 6 títulos: guardar desplaza al más viejo y
     # deshacer no lo trae de vuelta. Por eso se compara aparte de los contadores.
+    # boosted_authors sale de un set: el orden puede cambiar entre corridas aunque los datos sean iguales.
+    def sin_orden(v):
+        return sorted(v) if isinstance(v, list) and all(isinstance(x, str) for x in v) else v
+
     difiere = {k: (antes.get(k), despues.get(k)) for k in set(antes) | set(despues)
-               if k != "liked_examples" and antes.get(k) != despues.get(k)}
+               if k != "liked_examples" and sin_orden(antes.get(k)) != sin_orden(despues.get(k))}
     check("Los contadores (temas, fuentes) vuelven a como estaban", not difiere, str(difiere))
     check("El título guardado ya no figura como ejemplo",
           all(e.get("id") != ids["far1"] for e in despues.get("liked_examples", [])))
