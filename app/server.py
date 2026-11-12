@@ -685,8 +685,10 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
 
         if path == "/api/profile":
             try:
+                # Solo se toca el criterio si el cuerpo lo trae: "Actualizar temas" manda solo
+                # los temas y antes dejaba el criterio en "" (volvía al valor por defecto).
                 save_profile_data(user_id, body.get("focus_topics", []),
-                                  body.get("system_prompt_criteria", ""))
+                                  body.get("system_prompt_criteria"))
                 self.send_json_response({"status": "success"})
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)

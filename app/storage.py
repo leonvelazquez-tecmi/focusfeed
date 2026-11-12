@@ -910,23 +910,34 @@ def fetch_profile(user_id: str):
     return _parse_profile_row(dict(row), user_id) if row else _empty_profile(user_id)
 
 
-def save_profile_data(user_id: str, focus_topics: list, criteria: str = ""):
+def save_profile_data(user_id: str, focus_topics: list, criteria=None):
+    """Guarda los temas. `criteria=None` deja el criterio como está; una cadena
+    (incluso vacía) lo reemplaza."""
     topics_json = json.dumps(focus_topics, ensure_ascii=False)
     if is_supabase():
+        data = {"user_id": user_id, "focus_topics": topics_json, "updated_at": _now()}
+        if criteria is not None:
+            data["system_prompt_criteria"] = criteria
         supabase_request(
-            "user_profile?on_conflict=user_id", method="POST",
-            data={"user_id": user_id, "focus_topics": topics_json,
-                  "system_prompt_criteria": criteria, "updated_at": _now()},
+            "user_profile?on_conflict=user_id", method="POST", data=data,
             headers_extra={"Prefer": "resolution=merge-duplicates,return=representation"})
         return
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO user_profile (user_id, focus_topics, system_prompt_criteria, updated_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET focus_topics=excluded.focus_topics,
-            system_prompt_criteria=excluded.system_prompt_criteria, updated_at=excluded.updated_at
-    """, (user_id, topics_json, criteria, _now()))
+    if criteria is None:
+        cursor.execute("""
+            INSERT INTO user_profile (user_id, focus_topics, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET focus_topics=excluded.focus_topics,
+                updated_at=excluded.updated_at
+        """, (user_id, topics_json, _now()))
+    else:
+        cursor.execute("""
+            INSERT INTO user_profile (user_id, focus_topics, system_prompt_criteria, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET focus_topics=excluded.focus_topics,
+                system_prompt_criteria=excluded.system_prompt_criteria, updated_at=excluded.updated_at
+        """, (user_id, topics_json, criteria, _now()))
     conn.commit()
     conn.close()
 

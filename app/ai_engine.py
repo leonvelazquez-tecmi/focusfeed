@@ -394,8 +394,11 @@ def _learned_for_prompt(learned: dict) -> dict:
     for tag in set(a_favor) | set(en_contra):
         if tag and tag not in privados_t:
             netos[tag] = int(a_favor.get(tag, 0)) - int(en_contra.get(tag, 0))
-    temas_si = [t for t, n in sorted(netos.items(), key=lambda kv: (-kv[1], kv[0])) if n > 0][:PROMPT_LIST_MAX]
-    temas_no = [t for t, n in sorted(netos.items(), key=lambda kv: (kv[1], kv[0])) if n < 0][:PROMPT_LIST_MAX]
+    # Una sola señal débil (un clic o un "relevante", +1) es ruido: no viaja a JEV.
+    temas_si = [t for t, n in sorted(netos.items(), key=lambda kv: (-kv[1], kv[0]))
+                if n >= PROMPT_TAG_MIN_NET][:PROMPT_LIST_MAX]
+    temas_no = [t for t, n in sorted(netos.items(), key=lambda kv: (kv[1], kv[0]))
+                if n <= -PROMPT_TAG_MIN_NET][:PROMPT_LIST_MAX]
 
     def titulos(clave):
         out = []
@@ -407,6 +410,18 @@ def _learned_for_prompt(learned: dict) -> dict:
 
     return {"valora": valora, "descarta_autores": descarta_a, "temas_si": temas_si,
             "temas_no": temas_no, "ej_si": titulos("liked_examples"), "ej_no": titulos("disliked_examples")}
+
+
+# Texto base de la pregunta a JEV. Es genérico: no nombra los temas de nadie.
+# Antes el "no vale" decía "entretenimiento… reseña de ocio", lo que contradecía a
+# quien declara cine, música o gastronomía entre sus temas (12-nov).
+JEV_SI_TEXTO = ("Trata de alguno de sus temas ({temas}) con sustancia: análisis, crítica con "
+                "criterio, ideas propias o conocimiento útil. ")
+JEV_NO_TEXTO = ("Es ruido: noticia efímera, clickbait, promoción o anuncio de un producto o evento, "
+                "contenido genérico sin criterio propio, o un tema ajeno a sus intereses declarados, "
+                "aunque venga de una fuente que sigue. Un tema que el lector declara como suyo no es "
+                "ruido ni \"solo entretenimiento\" cuando se trata con análisis o crítica; el "
+                "entretenimiento solo cuenta como ruido si no está entre sus temas.")
 
 
 def _jev_question(profile: dict) -> dict:
@@ -434,10 +449,9 @@ def _jev_question(profile: dict) -> dict:
         "type": "noul",
         "instructions": "¿Este contenido vale el tiempo de este lector profesional?",
         "criteria": {
-            "true": (f"Trata de sus temas ({topics}) con sustancia. "
+            "true": (JEV_SI_TEXTO.format(temas=topics) +
                      f"{profile.get('system_prompt_criteria', '')}{extra_si}"),
-            "false": ("Es entretenimiento, noticia efímera, clickbait, reseña de ocio o un tema "
-                      "ajeno a sus intereses, aunque venga de una fuente que sigue." + extra_no),
+            "false": JEV_NO_TEXTO + extra_no,
         },
     }}
 
@@ -597,6 +611,7 @@ EXAMPLES_MAX = 6             # títulos de ejemplo que se guardan por lista
 PROMPT_EXAMPLES = 5          # ejemplos que viajan en la pregunta a JEV
 PROMPT_LIST_MAX = 8          # temas o fuentes por lista en la pregunta a JEV
 PROMPT_AVOID_AUTHORS_MAX = 5
+PROMPT_TAG_MIN_NET = 2       # saldo mínimo (a favor o en contra) para que una etiqueta llegue a JEV
 
 RATING_TO_STATUS = {
     "love": "reading",
