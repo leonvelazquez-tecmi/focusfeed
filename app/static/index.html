@@ -970,7 +970,7 @@ async function markAllRead(){
 function openFeedback(id){
   const it=items.find(i=>i.id===id); if(!it) return;
   fbItemId=id; $('#fb-title').textContent=it.title;
-  setRate(it.user_rating&&!['none','click'].includes(it.user_rating)?it.user_rating:'love');
+  setRate(it.user_rating&&!['none','click','save'].includes(it.user_rating)?it.user_rating:'love');
   $('#fb-comment').value=it.user_feedback_comment||'';
   openModal('modal-feedback');
 }

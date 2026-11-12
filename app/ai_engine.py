@@ -332,6 +332,10 @@ def score_for_user(item: dict, profile: dict) -> dict:
             score += min(int(veces) * CLICK_AUTHOR_POINTS, CLICK_AUTHOR_CAP)
             break
 
+    # Fuente que has descartado de forma repetida (saldo de -5 o peor).
+    if author and _author_strength(learned, author) <= AUTHOR_AVOID_AT:
+        score -= AUTHOR_AVOID_PENALTY
+
     for tag, weight in (learned.get("boosted_tags") or {}).items():
         if tag in tags or tag in matched:
             score += min(int(weight) * 5, 20)
@@ -349,31 +353,91 @@ def score_for_user(item: dict, profile: dict) -> dict:
     return {"relevance_score": score, "curator_note": note}
 
 
+def _author_strength(learned: dict, author: str) -> int:
+    """Fuerza de una fuente para este lector, sumando todas sus señales.
+
+    author_scores: corazón +3, relevante +2, guardar +2, pulgar abajo -3.
+    clicked_authors: +1 por clic (contador propio, no se duplica en author_scores).
+    Quien estaba en boosted_authors desde antes de author_scores vale +3 de base.
+    """
+    scores = learned.get("author_scores") or {}
+    fuerza = int(scores.get(author, 0))
+    if author not in scores and author in (learned.get("boosted_authors") or []):
+        fuerza += 3
+    fuerza += int((learned.get("clicked_authors") or {}).get(author, 0))
+    return fuerza
+
+
+def _learned_for_prompt(learned: dict) -> dict:
+    """Lo aprendido, ordenado y recortado para la pregunta a JEV.
+
+    Nada del buzón corporativo entra: sus remitentes y etiquetas están en
+    private_authors / private_tags y sus títulos nunca se guardan como ejemplo.
+    """
+    privados_a = set(learned.get("private_authors") or [])
+    privados_t = set(learned.get("private_tags") or [])
+
+    fuerzas = {}
+    for nombre in (set(learned.get("boosted_authors") or []) | set(learned.get("author_scores") or {})
+                   | set(learned.get("clicked_authors") or {})):
+        if nombre and nombre not in privados_a:
+            fuerzas[nombre] = _author_strength(learned, nombre)
+    # Empate: orden alfabético, para que la pregunta sea estable entre llamadas.
+    valora = [a for a, f in sorted(fuerzas.items(), key=lambda kv: (-kv[1], kv[0]))
+              if f >= AUTHOR_VALUE_AT][:PROMPT_LIST_MAX]
+    descarta_a = [a for a, f in sorted(fuerzas.items(), key=lambda kv: (kv[1], kv[0]))
+                  if f <= AUTHOR_AVOID_AT][:PROMPT_AVOID_AUTHORS_MAX]
+
+    a_favor = learned.get("boosted_tags") or {}
+    en_contra = learned.get("penalized_tags") or {}
+    netos = {}
+    for tag in set(a_favor) | set(en_contra):
+        if tag and tag not in privados_t:
+            netos[tag] = int(a_favor.get(tag, 0)) - int(en_contra.get(tag, 0))
+    temas_si = [t for t, n in sorted(netos.items(), key=lambda kv: (-kv[1], kv[0])) if n > 0][:PROMPT_LIST_MAX]
+    temas_no = [t for t, n in sorted(netos.items(), key=lambda kv: (kv[1], kv[0])) if n < 0][:PROMPT_LIST_MAX]
+
+    def titulos(clave):
+        out = []
+        for ej in (learned.get(clave) or [])[-PROMPT_EXAMPLES:][::-1]:  # los más recientes primero
+            t = (ej.get("t") if isinstance(ej, dict) else str(ej)) or ""
+            if t.strip():
+                out.append(t.strip()[:80])
+        return out
+
+    return {"valora": valora, "descarta_autores": descarta_a, "temas_si": temas_si,
+            "temas_no": temas_no, "ej_si": titulos("liked_examples"), "ej_no": titulos("disliked_examples")}
+
+
 def _jev_question(profile: dict) -> dict:
     topics = "; ".join(profile.get("focus_topics", []))
     learned = profile.get("learned_preferences", {}) or {}
-    gusta_lista = list(learned.get("boosted_authors", []))
-    # Quien abres seguido (3 clics o más) también cuenta como "suele calificar bien",
-    # después de los que calificaste con corazón.
-    for nombre, veces in sorted((learned.get("clicked_authors") or {}).items(),
-                                key=lambda kv: -int(kv[1])):
-        if int(veces) >= CLICK_AUTHOR_MIN_FOR_PROMPT and nombre not in gusta_lista:
-            gusta_lista.append(nombre)
-    gusta = ", ".join(gusta_lista[:8])
-    evita = ", ".join(list((learned.get("penalized_tags") or {}))[:8])
-    extra = ""
-    if gusta:
-        extra += f" Suele calificar bien: {gusta}."
-    if evita:
-        extra += f" Suele descartar: {evita}."
+    L = _learned_for_prompt(learned)
+
+    extra_si = ""
+    if L["temas_si"]:
+        extra_si += f" Por lo que ha calificado, le interesan sobre todo: {', '.join(L['temas_si'])}."
+    if L["valora"]:
+        extra_si += f" Fuentes que más valora: {', '.join(L['valora'])}."
+    if L["ej_si"]:
+        extra_si += " Ejemplos recientes que le gustaron: " + "; ".join(f"«{t}»" for t in L["ej_si"]) + "."
+
+    extra_no = ""
+    if L["temas_no"]:
+        extra_no += f" Suele descartar temas como: {', '.join(L['temas_no'])}."
+    if L["descarta_autores"]:
+        extra_no += f" Fuentes que suele descartar: {', '.join(L['descarta_autores'])}."
+    if L["ej_no"]:
+        extra_no += " Ejemplos recientes que descartó: " + "; ".join(f"«{t}»" for t in L["ej_no"]) + "."
+
     return {"interesa": {
         "type": "noul",
         "instructions": "¿Este contenido vale el tiempo de este lector profesional?",
         "criteria": {
             "true": (f"Trata de sus temas ({topics}) con sustancia. "
-                     f"{profile.get('system_prompt_criteria', '')}{extra}"),
+                     f"{profile.get('system_prompt_criteria', '')}{extra_si}"),
             "false": ("Es entretenimiento, noticia efímera, clickbait, reseña de ocio o un tema "
-                      "ajeno a sus intereses, aunque venga de una fuente que sigue."),
+                      "ajeno a sus intereses, aunque venga de una fuente que sigue." + extra_no),
         },
     }}
 
@@ -484,15 +548,25 @@ def score_pending_for_user(user_id: str, limit: int = 40):
 # El corazón guarda automático; el pulgar abajo lo saca del feed de verdad.
 # 'like' es una señal más suave: entrena preferencias sin mover el item.
 # Pesos de las señales, de más fuerte a más débil (positivas):
-#   corazón: tags +2 y autor fijo (+15 al puntuar)
-#   relevante (like): tags +1 y autor fijo
-#   clic en la tarjeta: tags +1 y un contador por autor (+3 por clic, tope +9)
+#   corazón: tags +2, fuente +3 (y fija en boosted_authors)
+#   relevante (like): tags +1, fuente +2 (y fija)
+#   guardar (botón): tags +1, fuente +2; quitar de guardados lo deshace
+#   clic en la tarjeta: tags +1 y un contador por autor (+3 por clic al puntuar, tope +9)
 #   nada: 0
-# El pulgar abajo penaliza tags con 2 por tag y no depende de los clics.
+# El pulgar abajo penaliza tags con 2 por tag y a la fuente con -3.
+# Una fuente con saldo de -5 o peor se considera "que suele descartar".
 CLICK_TAG_WEIGHT = 1
 CLICK_AUTHOR_POINTS = 3
 CLICK_AUTHOR_CAP = 9
-CLICK_AUTHOR_MIN_FOR_PROMPT = 3
+SAVE_TAG_WEIGHT = 1
+AUTHOR_POINTS = {"love": 3, "like": 2, "save": 2, "dislike": -3}
+AUTHOR_VALUE_AT = 3          # saldo mínimo para entrar a "fuentes que más valora"
+AUTHOR_AVOID_AT = -5         # saldo máximo para entrar a "fuentes que suele descartar"
+AUTHOR_AVOID_PENALTY = 15    # puntos que resta el motor de respaldo a esa fuente
+EXAMPLES_MAX = 6             # títulos de ejemplo que se guardan por lista
+PROMPT_EXAMPLES = 5          # ejemplos que viajan en la pregunta a JEV
+PROMPT_LIST_MAX = 8          # temas o fuentes por lista en la pregunta a JEV
+PROMPT_AVOID_AUTHORS_MAX = 5
 
 RATING_TO_STATUS = {
     "love": "reading",
@@ -500,15 +574,114 @@ RATING_TO_STATUS = {
 }
 
 
+def _item_tags(item: dict) -> list:
+    try:
+        raw = item.get("topic_tags")
+        return json.loads(raw) if isinstance(raw, str) and raw else (raw or [])
+    except Exception:
+        return []
+
+
+def _add_example(learned: dict, key: str, item: dict):
+    """Guarda el título como ejemplo (sin repetir, solo los últimos EXAMPLES_MAX)."""
+    lista = [e for e in (learned.get(key) or []) if not (isinstance(e, dict) and e.get("id") == item.get("id"))]
+    lista.append({"id": item.get("id"), "t": (item.get("title") or "")[:120]})
+    learned[key] = lista[-EXAMPLES_MAX:]
+
+
+def _drop_example(learned: dict, key: str, item_id):
+    if key in learned:
+        learned[key] = [e for e in (learned.get(key) or [])
+                        if not (isinstance(e, dict) and e.get("id") == item_id)]
+
+
+def _learn(learned: dict, rating: str, item: dict, undo: bool = False):
+    """Aplica (o deshace) una señal sobre lo aprendido. Modifica `learned` en sitio.
+
+    Un item del buzón corporativo también enseña al motor local, pero su
+    remitente y sus etiquetas quedan marcados como privados y nunca viajan a JEV;
+    su título jamás se guarda como ejemplo.
+    """
+    tags = _item_tags(item)
+    author = item.get("author")
+    privado = is_outlook_item(item)
+    sign = -1 if undo else 1
+
+    boosted_authors = set(learned.get("boosted_authors") or [])
+    boosted_tags = dict(learned.get("boosted_tags") or {})
+    penalized_tags = dict(learned.get("penalized_tags") or {})
+    clicked_authors = dict(learned.get("clicked_authors") or {})
+    author_scores = dict(learned.get("author_scores") or {})
+
+    if author and rating in AUTHOR_POINTS:
+        # Un autor que ya contaba como fijo (antes de author_scores) conserva su +3 de base.
+        if author not in author_scores and author in boosted_authors:
+            author_scores[author] = 3
+        author_scores[author] = int(author_scores.get(author, 0)) + sign * AUTHOR_POINTS[rating]
+
+    if rating in ("love", "like", "save"):
+        weight = {"love": 2, "like": 1, "save": SAVE_TAG_WEIGHT}[rating]
+        if rating != "save" and author and not undo:
+            boosted_authors.add(author)
+        for t in tags:
+            boosted_tags[t] = max(0, boosted_tags.get(t, 0) + sign * weight)
+            # Guardar no toca penalizaciones: así quitarlo deja el perfil exactamente como estaba.
+            if rating != "save" and t in penalized_tags:
+                penalized_tags[t] = max(0, penalized_tags[t] - 1)
+        if not privado:
+            if undo:
+                _drop_example(learned, "liked_examples", item.get("id"))
+            else:
+                _add_example(learned, "liked_examples", item)
+    elif rating == "click":
+        if author:
+            clicked_authors[author] = int(clicked_authors.get(author, 0)) + 1
+        for t in tags:
+            boosted_tags[t] = boosted_tags.get(t, 0) + CLICK_TAG_WEIGHT
+            if t in penalized_tags:
+                penalized_tags[t] = max(0, penalized_tags[t] - 1)
+    elif rating == "dislike":
+        boosted_authors.discard(author)
+        for t in tags:
+            penalized_tags[t] = penalized_tags.get(t, 0) + 2
+            if t in boosted_tags:
+                boosted_tags[t] = max(0, boosted_tags[t] - 1)
+        if not privado:
+            _add_example(learned, "disliked_examples", item)
+
+    if privado:
+        if author:
+            learned["private_authors"] = sorted(set(learned.get("private_authors") or []) | {author})
+        learned["private_tags"] = sorted(set(learned.get("private_tags") or []) | set(tags))
+
+    if undo:  # deshacer no deja ceros sueltos: el perfil queda exactamente como estaba
+        boosted_tags = {t: w for t, w in boosted_tags.items() if w}
+        author_scores = {a: v for a, v in author_scores.items() if v}
+
+    learned.update({
+        "boosted_authors": list(boosted_authors),
+        "boosted_tags": boosted_tags,
+        "penalized_tags": penalized_tags,
+        "clicked_authors": clicked_authors,
+        "author_scores": author_scores,
+    })
+
+
+def _load_learned(user_id: str) -> dict:
+    from app.storage import fetch_profile
+    # Se parte del JSON completo para no perder campos que esta función no toca.
+    return dict((fetch_profile(user_id).get("learned_preferences") or {}))
+
+
 def record_feedback(user_id: str, item_id: int, rating: str, comment: str = ""):
     """Guarda la calificación, mueve el item de estado y ajusta las preferencias."""
     from app.storage import (save_user_feedback, get_item_by_id,
-                             update_learned_preferences, fetch_profile,
-                             set_item_status)
+                             update_learned_preferences, set_item_status)
 
     if rating == "click":
         # El clic es la señal más débil: cuenta una sola vez por tarjeta y nunca
         # pisa una calificación explícita (corazón, relevante o pulgar abajo).
+        # Tampoco suma sobre una tarjeta guardada: guardar ya dijo más.
         from app.storage import get_user_item
         previo = (get_user_item(user_id, item_id) or {}).get("user_rating") or "none"
         if previo != "none":
@@ -524,46 +697,39 @@ def record_feedback(user_id: str, item_id: int, rating: str, comment: str = ""):
     if not item:
         return
 
-    profile = fetch_profile(user_id)
-    learned = profile.get("learned_preferences", {}) or {}
-    boosted_authors = set(learned.get("boosted_authors", []))
-    boosted_tags = dict(learned.get("boosted_tags", {}))
-    penalized_tags = dict(learned.get("penalized_tags", {}))
-    clicked_authors = dict(learned.get("clicked_authors", {}))
+    learned = _load_learned(user_id)
+    _learn(learned, rating, item)
+    update_learned_preferences(user_id, learned)
 
-    try:
-        raw_tags = item.get("topic_tags")
-        tags = json.loads(raw_tags) if isinstance(raw_tags, str) and raw_tags else (raw_tags or [])
-    except Exception:
-        tags = []
 
-    author = item.get("author")
+def record_save(user_id: str, item_id: int):
+    """Guardar con el botón es una señal positiva. No pisa una calificación
+    explícita (corazón, relevante, pulgar abajo) ni cuenta dos veces."""
+    from app.storage import get_user_item, get_item_by_id, save_user_feedback, update_learned_preferences
 
-    if rating in ("love", "like"):
-        if author:
-            boosted_authors.add(author)
-        weight = 2 if rating == "love" else 1
-        for t in tags:
-            boosted_tags[t] = boosted_tags.get(t, 0) + weight
-            if t in penalized_tags:
-                penalized_tags[t] = max(0, penalized_tags[t] - 1)
-    elif rating == "click":
-        if author:
-            clicked_authors[author] = int(clicked_authors.get(author, 0)) + 1
-        for t in tags:
-            boosted_tags[t] = boosted_tags.get(t, 0) + CLICK_TAG_WEIGHT
-            if t in penalized_tags:
-                penalized_tags[t] = max(0, penalized_tags[t] - 1)
-    elif rating == "dislike":
-        boosted_authors.discard(author)
-        for t in tags:
-            penalized_tags[t] = penalized_tags.get(t, 0) + 2
-            if t in boosted_tags:
-                boosted_tags[t] = max(0, boosted_tags[t] - 1)
+    previo = (get_user_item(user_id, item_id) or {}).get("user_rating") or "none"
+    if previo not in ("none", "click"):
+        return
+    item = get_item_by_id(item_id)
+    if not item:
+        return
+    save_user_feedback(user_id, item_id, "save", "")
+    learned = _load_learned(user_id)
+    _learn(learned, "save", item)
+    update_learned_preferences(user_id, learned)
 
-    update_learned_preferences(user_id, {
-        "boosted_authors": list(boosted_authors),
-        "boosted_tags": boosted_tags,
-        "penalized_tags": penalized_tags,
-        "clicked_authors": clicked_authors,
-    })
+
+def record_unsave(user_id: str, item_id: int):
+    """Quitar de guardados deshace lo que sumó el botón Guardar, y solo eso:
+    un corazón o un relevante ya dados se quedan."""
+    from app.storage import get_user_item, get_item_by_id, save_user_feedback, update_learned_preferences
+
+    if ((get_user_item(user_id, item_id) or {}).get("user_rating") or "none") != "save":
+        return
+    item = get_item_by_id(item_id)
+    save_user_feedback(user_id, item_id, "none", "")
+    if not item:
+        return
+    learned = _load_learned(user_id)
+    _learn(learned, "save", item, undo=True)
+    update_learned_preferences(user_id, learned)

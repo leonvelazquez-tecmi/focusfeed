@@ -28,7 +28,7 @@ from app.ingestion import (
 from app.extractors import fetch_og_image
 from app.shorts import drop_shorts
 from app.ai_engine import (
-    process_item_ai, record_feedback, score_pending_for_user, ai_health, ai_canary,
+    process_item_ai, record_feedback, record_save, record_unsave, score_pending_for_user, ai_health, ai_canary,
     RATING_TO_STATUS
 )
 
@@ -554,7 +554,17 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
         if match_status:
             item_id = int(match_status.group(1))
             try:
-                set_item_status(user_id, item_id, body.get("status", "inbox"))
+                nuevo = body.get("status", "inbox")
+                set_item_status(user_id, item_id, nuevo)
+                # Guardar con el botón enseña; quitarlo lo deshace. Una falla aquí
+                # nunca debe tumbar el cambio de estado que el usuario sí pidió.
+                try:
+                    if nuevo == "reading":
+                        record_save(user_id, item_id)
+                    elif nuevo == "inbox":
+                        record_unsave(user_id, item_id)
+                except Exception as e:
+                    print(f"señal de guardado: {e}")
                 self.send_json_response({"status": "success", "item_id": item_id})
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
