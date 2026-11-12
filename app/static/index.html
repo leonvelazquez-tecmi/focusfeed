@@ -360,6 +360,11 @@
     <div id="l-authors" class="chips"></div>
     <label class="lbl">🎯 Temas con más afinidad</label>
     <div id="l-tags" class="chips"></div>
+    <label class="lbl">🎬 De tus likes de YouTube</label>
+    <div id="l-yt" class="chips"></div>
+    <p id="l-yt-note" style="color:var(--text-2);font-size:14px;margin:6px 0"></p>
+    <button class="btn" id="btn-yt-learn" data-act="yt-learn">Aprender de mis likes de YouTube</button>
+    <button class="btn-wide hidden" id="btn-yt-forget" data-act="yt-forget">Olvidar mis likes de YouTube</button>
     <label class="lbl">🎨 Apariencia</label>
     <div class="rateopts">
       <button class="rateopt" data-theme-opt="auto"><span class="em">🔄</span>Automático</button>
@@ -655,6 +660,27 @@ async function enrich(){
   }catch(e){}
   finally{ enriching=false; }
 }
+// Likes de YouTube: lo aprendido se muestra tal cual (canales y temas con su conteo).
+function renderYt(y){
+  y=y||{};
+  const autores=Object.entries(y.authors||{}).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const temas=Object.entries(y.tags||{}).filter(([,n])=>n>=2).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const chips=autores.map(([k,n])=>`<span class="chip">▶ ${esc(k)} ×${n}</span>`)
+    .concat(temas.map(([k,n])=>`<span class="chip">★ ${esc(k)} ×${n}</span>`));
+  $('#l-yt').innerHTML=chips.length?chips.join(''):'<span class="chip">Aún sin likes aprendidos</span>';
+  const conectado=!!google.connected;
+  $('#l-yt-note').textContent=!conectado
+    ? 'Conecta tu Google en Fuentes para aprender de tus likes.'
+    : (y.imported_at
+        ? `Leí ${y.likes_read||0} likes · ${relTime(y.imported_at)}. Se actualiza solo una vez al día.`
+        : 'Lee tus 300 likes más recientes. Solo guarda cuántas veces aparece cada canal y tema, no los títulos.');
+  $('#btn-yt-learn').classList.toggle('hidden',!conectado);
+  $('#btn-yt-learn').textContent=y.enabled?'Actualizar ahora':'Aprender de mis likes de YouTube';
+  $('#btn-yt-forget').classList.toggle('hidden',!y.enabled);
+}
+async function autoLearnLikes(){
+  try{ await api('/api/google/learn-likes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({force:false})}); }catch(e){}
+}
 async function loadProfile(){
   try{
     const p=await api('/api/profile'), st=await api('/api/status');
@@ -664,6 +690,7 @@ async function loadProfile(){
     $('#l-authors').innerHTML = a.length? a.map(x=>`<span class="chip">✓ ${esc(x)}</span>`).join('') : '<span class="chip">Aún sin canales calificados</span>';
     const tg=Object.keys(L.boosted_tags||{});
     $('#l-tags').innerHTML = tg.length? tg.map(x=>`<span class="chip">★ ${esc(x)}</span>`).join('') : '<span class="chip">Califica con ❤️ lo que te guste</span>';
+    renderYt(L.yt);
     $('#l-topics').value=(p.focus_topics||[]).join('\n');
   }catch(e){}
 }
@@ -1102,6 +1129,22 @@ document.addEventListener('click',async e=>{
     await api('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({focus_topics:topics})});
     closeModal('modal-learned'); toast('Temas actualizados'); loadItems();
   }
+  else if(act==='yt-learn'){
+    toast('Leyendo tus likes de YouTube…');
+    try{
+      const d=await api('/api/google/learn-likes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({force:true})});
+      if(d.status==='success') toast(d.likes_read?`Aprendí de ${d.likes_read} likes: ${d.channels} canales, ${d.topics} temas`:'No encontré likes para aprender');
+      else if(d.status==='reconnect'){ google.connected=false; google.expired=true; toast('Vuelve a conectar Google: el permiso caducó.'); }
+      else if(d.status==='account_not_allowed'){ google.connected=false; toast('Esa es una cuenta corporativa. Conecta una cuenta personal.'); }
+      else toast(d.message||'No se pudieron leer tus likes.');
+    }catch(e){ toast('No se pudieron leer tus likes: '+e.message); }
+    loadProfile();
+  }
+  else if(act==='yt-forget'){
+    try{ await api('/api/google/forget-likes',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); toast('Olvidé tus likes de YouTube'); }
+    catch(e){ toast('No se pudo olvidar: '+e.message); }
+    loadProfile();
+  }
   else if(act==='add-feed'){
     const url=$('#feed-url').value.trim(); if(!url) return;
     toast('Conectando canal…');
@@ -1154,6 +1197,7 @@ applyTheme(currentTheme());
   if(google.connected && !volvio){
     try{ const d=await discoverNow(false); hallo=(d.added||[]).length>0; }catch(e){}
   }
+  if(google.connected && !volvio) autoLearnLikes();
   if(!hallo && !volvio) autoSyncIfStale();
 })();
 </script>

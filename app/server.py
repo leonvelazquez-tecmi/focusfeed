@@ -494,6 +494,22 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response({"status": "error", "message": str(e), "added": []}, 500)
             return
 
+        # Los likes de YouTube enseñan gustos. Sin force, solo corre si la persona ya lo activó
+        # y pasó un día. No pide la llave de dueño: solo lee y escribe el perfil de quien llama.
+        if path == "/api/google/learn-likes":
+            try:
+                self.send_json_response(google_sync.learn_from_likes(user_id, force=bool(body.get("force"))))
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
+            return
+
+        if path == "/api/google/forget-likes":
+            try:
+                self.send_json_response(google_sync.forget_likes(user_id))
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
+            return
+
         # Newsletters del buzón corporativo, resumidas por un agente autorizado y enviadas por
         # el puente local. Autenticado con una llave propia, no con la de la app.
         if path == "/api/ingest/outlook":
