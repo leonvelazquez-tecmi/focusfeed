@@ -578,7 +578,7 @@ async function loadItems(retried){
       throw new Error('La lista llegó vacía aunque hay contenido.');
     }
     render(true);
-    if(enrichRounds<3 && items.some(i=>!i.summary_tldr)) enrich();
+    if(enrichRounds<3 && items.some(i=>!i.summary_tldr || i.relevance_score==null)) enrich();
   }catch(e){
     feed.innerHTML=`<div class="empty"><h3>No se pudo cargar</h3><p>${esc(e.message)}</p><button class="btn-wide accent" data-act="retry-items">Reintentar</button></div>`;
   }
@@ -638,12 +638,22 @@ function showNew(){
   render(true);
 }
 
+// Hasta 3 rondas por carga: cada una analiza hasta 10 resúmenes y califica hasta
+// 120 items. Sigue pidiendo mientras el servidor diga que quedan pendientes.
+let enriching=false;
 async function enrich(){
-  enrichRounds++;
+  if(enriching) return;
+  enriching=true;
   try{
-    const d=await api('/api/items/process-pending',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({limit:10})});
-    if(d.processed>0) refreshQuiet();
+    while(enrichRounds<3){
+      enrichRounds++;
+      // Solo la primera ronda analiza resúmenes (costo de IA igual que antes); las demás solo califican.
+      const d=await api('/api/items/process-pending',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({limit:enrichRounds===1?10:0})});
+      if(d.processed>0 || d.scored>0) refreshQuiet();
+      if(!d.scoring_has_more) break;
+    }
   }catch(e){}
+  finally{ enriching=false; }
 }
 async function loadProfile(){
   try{

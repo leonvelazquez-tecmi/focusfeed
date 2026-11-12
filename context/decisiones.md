@@ -84,3 +84,15 @@ Privacidad: del buzón corporativo nunca se guarda un título como ejemplo, y su
 
 Lo que no resuelve: los items que ya tienen score no se recalculan, así que la mejora se nota con contenido nuevo. Recalificar y calificar desde el cron suben el costo; el corte de relevancia en "Para ti" requiere migración. Se deciden con los datos de producción.
 
+## 2026-11-12 · Calificar todo lo reciente (30 días), no solo los 160 más nuevos
+
+Datos de producción de León (12-nov): 865 items en "Para ti" en 7 días, 341 sin score (39%) y 778 sin resumen de IA (90%). Score mediano de lo calificado: 13. Lo sin calificar entra con 20 (v8), así que lo que JEV nunca evaluó queda por encima de lo que evaluó como poco relevante.
+
+Decisión: buscar directamente lo pendiente en vez de una ventana de la bandeja. Solo cuentan los últimos 30 días porque en "Para ti" el score no ordena lo más viejo (v8). Se califican 120 items por llamada con tope de 25 s, y el cliente encadena hasta 3 rondas por carga (máximo 360 items). Solo la primera ronda analiza resúmenes con Gemini: el costo de resúmenes no cambia.
+
+Costo de IA (decisión de negocio): más llamadas a JEV por usuario, no más caras. Con los números de León, unas +65% de llamadas; con el precio del spike (USD 0.024 por 1,000 items) son unos USD 0.008 una sola vez para ponerse al corriente y del orden de USD 0.04 al mes en régimen [Inference, sin llave de OpenRouter en la sesión]. Se mide con `ai_usage.kind = 'jev_score'`.
+
+Migración v9 (función de solo lectura `get_unscored_items`): la aplica León a mano. Sin ella el código usa el comportamiento anterior; no falla. Rollback: `supabase_rollback_v9_unscored_items.sql`.
+
+No resuelve: el contenido sin resumen sigue sin etiquetas (el aprendizaje por temas no puede actuar sobre él), y el criterio fijo del prompt de JEV ("no vale: entretenimiento, reseña de ocio") contradice los temas de ocio de León (cine, música, enología). Eso es el PR 3 y cambia el prompt.
+

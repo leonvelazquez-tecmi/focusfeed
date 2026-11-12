@@ -28,7 +28,7 @@ from app.ingestion import (
 from app.extractors import fetch_og_image
 from app.shorts import drop_shorts
 from app.ai_engine import (
-    process_item_ai, record_feedback, record_save, record_unsave, score_pending_for_user, ai_health, ai_canary,
+    process_item_ai, record_feedback, record_save, record_unsave, score_pending_batch, ai_health, ai_canary,
     RATING_TO_STATUS
 )
 
@@ -539,13 +539,14 @@ class FeedCuratorHTTPHandler(http.server.SimpleHTTPRequestHandler):
         if path == "/api/items/process-pending":
             limit = int(body.get("limit", 10))
             try:
-                pending_ids = get_pending_item_ids(limit)
+                pending_ids = get_pending_item_ids(limit) if limit > 0 else []  # limit 0: solo calificar
                 results = run_parallel(lambda iid: process_item_ai(iid, user_id),
                                        pending_ids, workers=6, timeout=20)
                 processed = sum(1 for r in results if r)
-                scored = score_pending_for_user(user_id)
+                lote = score_pending_batch(user_id)
                 self.send_json_response({"status": "success", "processed": processed,
-                                         "scored": scored, "has_more": len(pending_ids) >= limit})
+                                         "scored": lote["scored"], "has_more": limit > 0 and len(pending_ids) >= limit,
+                                         "scoring_has_more": lote["has_more"]})
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
             return
