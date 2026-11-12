@@ -1,6 +1,6 @@
 # Roadmap
 
-Actualizado: 11-oct-2026
+Actualizado: 12-nov-2026
 
 ## Objetivo de este ciclo
 
@@ -44,6 +44,14 @@ La línea de llegada del ciclo: dos cuentas distintas, cada una con sus fuentes 
 - **Calificar todo lo reciente (12-nov), PR 2 de 3.** Datos de producción del 12-nov: 341 de 865 items de la última semana sin score (39%), que entran a "Para ti" con 20, más que el score mediano de JEV (13). Causas: la calificación solo miraba los 160 items más nuevos de la bandeja, 40 por llamada y una llamada por carga de pestaña. Ahora busca directo lo pendiente de los últimos 30 días (`get_unscored_items`, `supabase_migration_v9_unscored_items.sql`, **la aplica León a mano**; sin ella el código vuelve al comportamiento anterior), califica 120 por llamada con tope de 25 s y el cliente encadena hasta 3 rondas. Solo la primera ronda analiza resúmenes. `tests/test_cobertura_scoring.py`. Sigue el PR 3 (cambia el prompt): el criterio fijo "no vale: entretenimiento, reseña de ocio" contradice tres de los seis temas declarados de León.
 - **El prompt de JEV deja de contradecir tus temas de ocio (12-nov), PR 3 de 3.** El "no vale" fijo decía "entretenimiento… reseña de ocio", pero León declara cine de autor, música y enología, y sus fuentes con boost incluyen críticos de cine y música. Ahora el texto es genérico: un tema que el lector declara como suyo no es ruido cuando se trata con análisis o crítica; la promoción y los anuncios sí. Las etiquetas aprendidas con saldo menor a 2 ya no viajan a JEV. "Actualizar temas" dejaba el criterio en vacío (volvía al valor por defecto): ya no lo pisa. `routines/jev_eval.py --comparar` mide el prompt anterior contra el nuevo sobre las calificaciones reales (se corre en la computadora de León). `tests/test_prompt_jev.py`. **No probado con JEV real** (sin llave en la sesión): se mide tras el deploy. Siguiente, solo si la medición sale bien: recalificar los últimos 30 días con el prompt nuevo (lleva tabla de respaldo y la aplica León).
 - **FocusFeed aprende de tus likes de YouTube (12-nov), PR 4.** Misma conexión de Google y mismo permiso (`youtube.readonly`) que las suscripciones: `videos.list?myRating=like`, hasta 300 likes más recientes, sin Shorts. No se importan como items (no entran a la bandeja): se guarda una foto de conteos por canal y por etiqueta en `learned_preferences.yt`, sin títulos, y cada corrida la reemplaza (importar dos veces no suma doble; un like quitado se desaprende). Peso: +2 por like al canal (tope +6) y +1 por etiqueta (tope +6); a JEV le llegan dos frases nuevas con canales de 2 likes o más y temas de peso 2 o más. Botones "Aprender de mis likes de YouTube" y "Olvidar mis likes de YouTube" en IA & Gustos; con la app abierta se refresca como máximo una vez al día. Sin migración y sin tocar el cron. `tests/test_youtube_likes.py`. **No probado con Google real** (consentimiento, formato real de los likes, cuántos traen etiquetas, cuota) ni con JEV real. Pendiente humano: revisar la descripción de uso del permiso de YouTube en la pantalla de consentimiento de Google Cloud.
+- **Pendientes de T9 tras el PR 4 (12-nov), en orden:**
+  1. **Medir el prompt (PR 3).** Corte: el deploy del PR #30 (mergeado ~01:07 UTC del 12-nov; confirmar la hora real en Vercel). Consulta SQL: score de lo calificado antes y después del corte, por tipo de calificación (`user_items.scored_at`). Pedirla con "mide el prompt".
+  2. **Medir los likes.** Primer aprendizaje hecho el 12-nov (300 likes, 134 canales, 100 temas). Ver en unos días si cambia lo que JEV sube en "Para ti".
+  3. **Recalificar los últimos 30 días** con el prompt y lo aprendido nuevos (ver el PR 3): solo si la medición sale bien.
+  4. **Limpiar las etiquetas de YouTube** (sinónimos y basura): León decidió esperar a medir.
+  5. **Migración v10 (la aplica León):** lo sin calificar entra con 20, más que el score mediano de JEV (13).
+  6. Resúmenes de IA: 90% sin resumen (10 por carga); sube el costo, va al final.
+  7. El contador "HOY" cuenta toda la bandeja sin límite de fecha (18,081 el 12-nov).
 - **Disparador de la calibración (17-oct):** con 15 calificaciones con score de JEV ya se ve que ordena bien pero puntúa bajo. Repetir la medición cuando haya unas 50: correr en el SQL Editor la consulta de `user_items` con `ai_usage.kind = 'jev_score'` agrupada por `user_rating`, y `python3 routines/jev_eval.py` en la computadora de León (necesita `OPENROUTER_API_KEY` y las variables de Supabase). Cambiar el criterio de JEV es cambio de prompt: plan y visto bueno primero.
 
 
@@ -73,6 +81,7 @@ Cuando eso exista, falta escribir: pantalla de acceso en `index.html`, envío de
    Ya está: credenciales por entorno (`GEMINI_API_KEY`), prompt sin nombre propio, palabras clave derivadas del perfil de cada usuario, tabla `ai_usage` con tokens reales del modelo y endpoint `GET /api/usage`.
    Falta: poner la llave en Vercel, elegir modelo definitivo (cargar la skill `claude-api` para IDs y precios vigentes, no adivinar), fijar `AI_PRICE_IN_PER_MTOK` y `AI_PRICE_OUT_PER_MTOK`, y aplicar tope por plan. Salida obligatoria: costo real por usuario activo al mes.
 2. **T5. Landing y onboarding.** Meta medible: del registro al primer feed curado en menos de 60 segundos, pegando el OPML de Feedly.
+   Antes de abrir a otras personas: la verificación de Google y la marca (ver `context/decisiones.md`, 12-nov, Google Cloud).
 3. **Diez conversaciones.** Mandarlo a diez personas con vault y guardar sus respuestas literales en `customers/`. Hábito semanal, no evento único.
 4. **T6. Export al vault como función de primer nivel.** Botón en cada tarjeta y acción de "manda los guardados de esta semana a mi vault".
 5. **T4. Stripe y planes.** Hasta el final, cuando ya sepamos qué dijeron esas diez personas.

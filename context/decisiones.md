@@ -124,3 +124,18 @@ Privacidad: estos nombres de canales y temas se incluyen en la pregunta a OpenRo
 
 Fuera: etiquetar cada video con Gemini (mejor calidad de temas, costo por video), usar títulos como ejemplos, refresco por cron, recalificar lo reciente.
 
+## 2026-11-12 · Google Cloud: dónde vive el cliente OAuth y qué falta antes de abrir a otras personas
+
+Revisado con León en la consola (cuenta personal, Gmail):
+- Proyecto **"My First Project"** (`graphite-argon-457414-n5`). Cliente OAuth web **"FocusFeed"**, creado el 24-oct-2026 (un día antes de la conexión en `google_connections`, 25-oct). El otro cliente, "Cliente web 1" (7-jun), no es de FocusFeed.
+- Estado de publicación: **En producción**, 1 usuario (reportado por León). Centro de verificación: sin verificación enviada ni requerida, porque en "Acceso a los datos" no hay permisos sensibles declarados aunque la app pide `youtube.readonly` y `gmail.readonly` al conectar. La información de marca no se muestra a los usuarios.
+- Consecuencia: para los likes de YouTube no hay nada que cambiar en Google (mismo permiso, sin descripción de uso que actualizar).
+- El cliente tiene **dos secretos activos** (aviso de seguridad de Google). **No borrar ninguno** hasta confirmar cuál usa `GOOGLE_CLIENT_SECRET` en Vercel; después dejar solo uno.
+- **Antes de abrir FocusFeed a otras personas (T5):** declarar los permisos en "Acceso a los datos", completar la información de marca (con enlace a `/privacidad`) y pasar la verificación de Google; la de Gmail (permiso restringido) suele ser la más exigente [Need to verify].
+
+## 2026-11-12 · Primer aprendizaje de likes: etiquetas en inglés y fragmentadas, se espera a medir
+
+Primera corrida real (León, 12-nov): 300 likes (el tope) → 134 canales y 100 temas. Las etiquetas vienen en inglés y fragmentadas ("movie", "movies" y "film" por separado; "comedy" ×15 y "artificial intelligence" ×12 arriba; "new" ×9 es basura). Las pone cada creador.
+
+Decisión de León: **esperar unos días y medir** cómo se comporta JEV con lo aprendido antes de limpiar. Si se limpia: unir sinónimos y descartar etiquetas basura, sin costo de IA. Para subir el tope de 300 likes basta cambiar `YT_LIKES_MAX` (1 unidad de cuota por cada 50).
+

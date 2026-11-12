@@ -48,7 +48,8 @@ El costo de tokens lo absorbe el producto. Consecuencia directa: cualquier cambi
 - **Frontend**: un solo archivo, `app/static/index.html`. CSS propio sin Tailwind, dark mode por `prefers-color-scheme`, delegación de eventos con `data-act`.
 - **Archivos estáticos**: `vercel.json` manda todo a la función, así que un archivo nuevo en `app/static` solo se sirve si `app/server.py` tiene ruta para él (ver el diccionario `ICONOS`). El ícono vive en `icon.svg`, la marca "FF" del encabezado; los PNG y el `.ico` se regeneran desde esa geometría con PIL.
 - **Ingesta**: RSS y Atom directo, sin API de YouTube (`app/ingestion.py`). Importador de OPML de Feedly.
-- **IA**: `app/ai_engine.py`, con motor heurístico de respaldo. Ver la deuda abierta en `ROADMAP.md`.
+- **Google**: `app/google_sync.py` conecta la cuenta personal de León (YouTube y Gmail, solo lectura, un solo permiso por servicio) para detectar suscripciones y newsletters. Los likes de YouTube **no son items**: enseñan gustos y se guardan como conteos en `learned_preferences.yt`. El cliente OAuth y su estado están en `context/decisiones.md`, 12-nov.
+- **IA**: `app/ai_engine.py`, con motor heurístico de respaldo. El score de "Para ti" lo pone JEV (OpenRouter) con la pregunta que arma `_jev_question`; lo que cada persona aprende vive en `learned_preferences` (JSON en `user_profile`). Ver la deuda abierta en `ROADMAP.md`.
 - **Cron**: `/api/cron/sync`, diario a las 13:00 UTC.
 
 ## Cómo verificar
@@ -68,7 +69,9 @@ La PWA instalada no se refresca sola. Tras un cambio de datos o de código, para
 ### En sesiones en la nube
 
 - Las pruebas son scripts, no pytest (no está instalado): `python3 tests/test_feed_recency.py`, `python3 tests/test_multitenancy.py`.
-- No hay preview registrado ni acceso a producción (el proxy bloquea `focusfeed-olive.vercel.app`). Se verifica en local con SQLite: sembrar items de edades distintas y capturar con Playwright (`/opt/node22/lib/node_modules/playwright`, Chromium en `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`).
+- El entorno no trae `html2text` (sí está en `requirements.txt`). Sin él, `tests/test_ingestion.py` falla en "Atom: título vacío cae a la primera línea" y no es un bug del código: `pip install html2text` antes de correr las pruebas.
+- Una prueba que compare listas armadas desde un `set` puede fallar solo con ciertas semillas de hash. Antes de dar por buena una prueba nueva, córrela con varias: `for s in 0 1 2 3 4 5 6 7 8 9 10 11; do PYTHONHASHSEED=$s python3 tests/test_x.py; done`.
+- No hay preview registrado ni acceso a producción (el proxy bloquea `focusfeed-olive.vercel.app`). Se verifica en local con SQLite: sembrar items de edades distintas y capturar con Playwright (`/opt/node22/lib/node_modules/playwright`, `chromium.launch()` sin opciones: el Chromium ya viene instalado y la ruta `chromium-1194` ya no existe).
 - Para apagar el servidor local, mata el PID. `pkill -f "python3 run.py"` también mata el shell de la sesión.
 - Corre las pruebas y haz push solo si pasan todas (`... && git push`). Con `;` entre comandos el push sale aunque una prueba falle.
 - Un PR mergeado no se reutiliza: reinicia la rama desde `main` con el mismo nombre y sube con `--force-with-lease`.
@@ -87,7 +90,7 @@ Al entregar una migración: el SQL completo en un bloque para copiar y pegar en 
 
 León no es programador. Toda acción humana se entrega en pasos numerados de clics, con el texto a pegar dentro del chat y nunca en un archivo que haya que abrir.
 
-Mergear un PR en GitHub: abrir el enlace, **Ready for review**, esperar el recuadro verde, **Merge pull request**, **Confirm merge**. Mergear puede disparar un deploy en Vercel, que es solo suyo.
+Mergear un PR en GitHub: abrir el enlace, **Ready for review**, esperar el recuadro verde, **Merge pull request**, **Confirm merge**. Mergear puede disparar un deploy en Vercel, que es solo suyo. León puede delegar el merge de un PR concreto en el chat ("hazlo tú"): vale solo para ese PR, se le pregunta cada vez y Claude nunca mergea por iniciativa propia.
 
 ## Permisos
 
